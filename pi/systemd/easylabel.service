@@ -1,0 +1,17 @@
+[Unit]
+Description=EasyLabelPrinting Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/EasyLabelPrinting/pi
+ExecStart=/home/pi/EasyLabelPrinting/pi/.venv/bin/python3 main.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
