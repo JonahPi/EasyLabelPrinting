@@ -1,8 +1,8 @@
 # Functional Specification Document (FSD)
 
 **Project:** Dynamic Label Printing System with Raspberry Pi, E-Paper Display, and MQTT
-**Version:** 1.0
-**Date:** 10.04.2026
+**Version:** 1.1
+**Date:** 11.04.2026
 **Author:** Bernd Heisterkamp
 
 ------
@@ -13,17 +13,17 @@
 
 This document describes the functionality of a system that:
 
-- Connects a **Brother label printer** (via Wi-Fi or USB) to a **Raspberry Pi Zero 2 W**.
+- Connects a **Brother QL-800 label printer** (USB) to a **Raspberry Pi**.
 - Uses an **E-Paper display** to show a dynamic QR code.
-- Provides a **Progressive Web App (PWA)** for selecting label types and entering data.
-- Exchanges data via **MQTT** (hosted on GitHub) between the PWA and Raspberry Pi.
+- Provides a **Progressive Web App (PWA)** for entering free-text label content.
+- Exchanges data via **MQTT** (public cloud broker) between the PWA and Raspberry Pi.
 - Validates the data and sends it to the label printer.
 
 ### 1.2 Scope
 
-- **Hardware:** Raspberry Pi Zero 2 W, Brother label printer, E-Paper display.
-- **Software:** Python script (Raspberry Pi), PWA (frontend), MQTT broker (GitHub).
-- **Protocols:** MQTT, HTTP/HTTPS, Wi-Fi/USB.
+- **Hardware:** Raspberry Pi 2B (→ Zero 2 W later), Brother QL-800 via USB (→ QL-820NWB later), 1.54" E-Paper display (SPI).
+- **Software:** Python script (Raspberry Pi), PWA (frontend, deferred to Phase 2), MQTT broker (public cloud).
+- **Protocols:** MQTT over TLS, Wi-Fi.
 
 ------
 
@@ -31,118 +31,163 @@ This document describes the functionality of a system that:
 
 ### 2.1 Components
 
-| Component                     | Description                                                  |
-| ----------------------------- | ------------------------------------------------------------ |
-| **Raspberry Pi Zero 2 W**     | Controls the printer, display, and MQTT communication. Runs the Python script. |
-| **Brother Label Printer**     | Prints labels based on received data (via Wi-Fi/USB).        |
-| **E-Paper Display**           | Displays a dynamic QR code (URL + random key).               |
-| **Progressive Web App (PWA)** | Web interface for selecting label types and entering data.   |
-| **MQTT Broker (GitHub)**      | Hosts MQTT topics for communication between PWA and Raspberry Pi. |
+| Component                     | Description                                                                 |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| **Raspberry Pi 2B**           | Controls the printer, display, and MQTT communication. Runs the Python script. Will migrate to Zero 2 W. |
+| **Brother QL-800**            | Prints labels via USB. Label media: 62mm endless. Will upgrade to QL-820NWB (Wi-Fi). |
+| **E-Paper Display**           | 1.54" DEBO EPA 1.54 (Waveshare-compatible, 200×200px, SPI). Displays a dynamic QR code. |
+| **Progressive Web App (PWA)** | Web interface for entering free-text label content. Deferred to Phase 2.    |
+| **MQTT Broker**               | HiveMQ public cloud broker (`broker.hivemq.com`). No authentication required. TLS on port 8883 (Pi) / WSS port 8884 (browser). |
 
 ### 2.2 Data Flow
 
 ```plaintext
-1. Raspberry Pi generates QR code (URL + random key) → E-Paper display.
-2. User scans QR code → PWA opens.
-3. User selects label type and enters data → PWA sends data + key to MQTT topic.
-4. Raspberry Pi subscribes to MQTT topic, validates key, and sends data to printer.
-5. Printer prints the label.
+1. Raspberry Pi generates a random session key → builds QR code URL → shows on E-Paper display.
+2. User scans QR code → PWA opens with key pre-filled in URL.
+3. User enters free text → PWA publishes JSON to MQTT topic labels/<key>.
+4. Raspberry Pi validates key, renders text as image, sends to printer.
+5. Printer prints label on 62mm endless media.
+6. Pi rotates session key and updates QR code on display.
 ```
 
 ------
 
 ## 3. Functional Requirements
 
-### 3.1 Raspberry Pi Zero 2 W
+### 3.1 Raspberry Pi Python Script
 
-| ID   | Requirement                                                  | Details                                                      |
-| ---- | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| FR1  | Connect to Brother printer (Wi-Fi/USB).                      | Use `brother_ql` library or Brother APIs.                    |
-| FR2  | Generate dynamic QR code (URL + random key) and display on E-Paper. | Use libraries like `qrcode` and `Pillow` for display control. |
-| FR3  | Implement MQTT client (subscribe to topic).                  | Use `paho-mqtt` library.                                     |
-| FR4  | Validate received data (key check).                          | Key must match the generated key.                            |
-| FR5  | Format data for printer and send.                            | Use `brother_ql` library or direct printer commands.         |
+| ID   | Requirement                                                    | Details                                                                 | Status |
+| ---- | -------------------------------------------------------------- | ----------------------------------------------------------------------- | ------ |
+| FR1  | Connect to Brother printer via USB.                            | `brother_ql` library, backend `pyusb`, identifier `usb://0x04f9:0x209b`. Fallback: `file:///dev/usb/lp0`. | Done   |
+| FR2  | Generate dynamic QR code (URL + random key) and display on E-Paper. | `qrcode` + `Pillow 9.5.0`, Waveshare vendored driver. 200×200px, mode '1'. | Implemented (display deferred to Phase 2 hardware) |
+| FR3  | Implement MQTT client (subscribe to topic `labels/<key>`).     | `paho-mqtt 2.1.0`, MQTTv5, TLS port 8883, QoS 1.                       | Done   |
+| FR4  | Validate received data (key check + payload structure).        | Constant-time compare (`secrets.compare_digest`). Validates `label_type`, text length ≤ 500 chars. | Done   |
+| FR5  | Render free text as image and print on 62mm endless media.     | Fixed width 720px, DejaVuSans-Bold font, auto-shrink from size 60 to 20. `brother_ql` convert + send. | Done   |
+| FR6  | Rotate session key and refresh QR after each successful print. | New key generated with `secrets.token_hex(6)` (48-bit entropy).        | Done   |
+| FR7  | Periodic QR refresh every 5 minutes (security hygiene).        | Background thread, key unchanged on timer refresh.                      | Done   |
+| FR8  | Run as systemd service with auto-restart.                      | `systemd/easylabel.service`.                                            | Done   |
 
-### 3.2 Progressive Web App (PWA)
+### 3.2 Progressive Web App (PWA) — Phase 2
 
-| ID   | Requirement                         | Details                             |
-| ---- | ----------------------------------- | ----------------------------------- |
-| FR6  | Scan QR code and extract URL + key. | Use `jsQR` or similar libraries.    |
-| FR7  | Display label types for selection.  | Dropdown menu or tile view.         |
-| FR8  | Provide form for data entry.        | Dynamic fields based on label type. |
-| FR9  | Send data + key to MQTT topic.      | Use `MQTT.js` library.              |
+| ID   | Requirement                         | Details                              | Status   |
+| ---- | ----------------------------------- | ------------------------------------ | -------- |
+| FR9  | Open from QR scan, extract key from URL. | `?key=<key>` query parameter.    | Deferred |
+| FR10 | Provide textarea for free-text entry and Print button. | Single-page, vanilla JS. | Deferred |
+| FR11 | Publish JSON to MQTT topic `labels/<key>`. | `MQTT.js 5.3.4`, WSS port 8884. | Deferred |
+| FR12 | Offline capability via Service Worker. | Cache-first strategy.               | Deferred |
+| FR13 | Hosted on GitHub Pages.             | Auto-deploy via GitHub Actions.      | Deferred |
 
-### 3.3 MQTT Broker (GitHub)
+### 3.3 MQTT Message Contract
 
-| ID   | Requirement                            | Details                                                      |
-| ---- | -------------------------------------- | ------------------------------------------------------------ |
-| FR10 | Host MQTT topic for data transmission. | Topic: `labels/{key}` (e.g., `labels/abc123`).               |
-| FR11 | Ensure authentication/authorization.   | Use GitHub Secrets or environment variables for credentials. |
+Topic: `labels/<key>`
+
+```json
+{
+  "key": "d28577ed4953",
+  "label_type": "freetext",
+  "data": {
+    "text": "Hello World\nLine 2"
+  }
+}
+```
+
+Validation rules (Pi-side): key match, `label_type` = `"freetext"`, text non-empty and ≤ 500 chars.
 
 ------
 
 ## 4. Non-Functional Requirements
 
-| ID   | Requirement                                    | Details                                 |
-| ---- | ---------------------------------------------- | --------------------------------------- |
-| NF1  | System must run stably and energy-efficiently. | Operate Raspberry Pi in low-power mode. |
-| NF2  | MQTT communication must be encrypted (TLS).    | Use MQTT over WebSockets with TLS.      |
-| NF3  | PWA must be offline-capable.                   | Use Service Worker and Cache API.       |
-| NF4  | QR code must update every 5 minutes.           | Use cron job or timer in Python script. |
+| ID   | Requirement                                    | Details                                         |
+| ---- | ---------------------------------------------- | ----------------------------------------------- |
+| NF1  | System must run stably and energy-efficiently. | Systemd auto-restart; e-paper sleeps between updates. |
+| NF2  | MQTT communication must be encrypted (TLS).    | TLS on port 8883; CA cert verified.             |
+| NF3  | PWA must be offline-capable.                   | Service Worker and Cache API (Phase 2).         |
+| NF4  | QR code must update every 5 minutes.           | Background timer thread in Python script.       |
+| NF5  | USB printer access without sudo.               | `pi` user added to `lp` and `dialout` groups.  |
 
 ------
 
 ## 5. Technical Details
 
-### 5.1 Hardware Interfaces
+### 5.1 Hardware
 
-- **Brother Printer:** Wi-Fi (recommended) or USB (fallback).
-- **E-Paper Display:** SPI or I2C (depends on display model).
+| Component       | Model / Spec                          | Interface |
+| --------------- | ------------------------------------- | --------- |
+| Raspberry Pi    | 2B (current) → Zero 2 W (future)     | —         |
+| Label Printer   | Brother QL-800 (current) → QL-820NWB (future) | USB → Wi-Fi |
+| E-Paper Display | DEBO EPA 1.54 / Waveshare 1.54" 200×200px | SPI   |
+
+**E-Paper SPI Wiring (BCM GPIO):**
+
+| E-Paper Pin | Pi Physical | BCM  | Function   |
+|-------------|-------------|------|------------|
+| VCC         | Pin 17      | 3.3V | Power      |
+| GND         | Pin 20      | GND  | Ground     |
+| DIN (MOSI)  | Pin 19      | 10   | SPI0 MOSI  |
+| CLK         | Pin 23      | 11   | SPI0 CLK   |
+| CS          | Pin 24      | 8    | SPI0 CE0   |
+| DC          | Pin 22      | 25   | Data/Cmd   |
+| RST         | Pin 11      | 17   | Reset      |
+| BUSY        | Pin 18      | 24   | Busy flag  |
 
 ### 5.2 Software Libraries
 
-| Component    | Library/Tool                        | Purpose                |
-| ------------ | ----------------------------------- | ---------------------- |
-| Raspberry Pi | `brother_ql`, `paho-mqtt`, `qrcode` | Printer, MQTT, QR code |
-| PWA          | `MQTT.js`, `jsQR`                   | MQTT, QR code scanning |
-| MQTT Broker  | GitHub Actions + Mosquitto (Docker) | MQTT hosting           |
+| Component    | Library/Tool                                  | Version  | Purpose                        |
+| ------------ | --------------------------------------------- | -------- | ------------------------------ |
+| Raspberry Pi | `paho-mqtt`                                   | 2.1.0    | MQTT client                    |
+| Raspberry Pi | `qrcode[pil]`                                 | 7.4.2    | QR code generation             |
+| Raspberry Pi | `Pillow`                                      | 9.5.0    | Image rendering (9.x required — brother_ql incompatible with 10+) |
+| Raspberry Pi | `brother_ql`                                  | 0.9.4    | Label printer driver           |
+| Raspberry Pi | `RPi.GPIO`, `spidev`                          | 0.7.1 / 3.6 | E-paper SPI control         |
+| Raspberry Pi | Waveshare epd1in54 driver                     | vendored | E-paper display                |
+| PWA          | `MQTT.js`                                     | 5.3.4    | MQTT over WebSocket (Phase 2)  |
 
-### 5.3 Data Format (MQTT Message)
+### 5.3 Repository Structure
 
-```json
-{
-  "key": "abc123",
-  "label_type": "address",
-  "data": {
-    "name": "Max Mustermann",
-    "street": "Musterstraße 1",
-    "city": "Berlin"
-  }
-}
+```
+EasyLabelPrinting/
+├── pi/
+│   ├── config.py            # All constants
+│   ├── key_manager.py       # Session key generation and validation
+│   ├── qr_generator.py      # QR code image generation
+│   ├── epaper_display.py    # E-paper SPI driver wrapper
+│   ├── mqtt_client.py       # MQTT subscriber
+│   ├── printer.py           # Label rendering and printing
+│   ├── main.py              # Entry point
+│   ├── test_mqtt_send.py    # CLI test tool for MQTT publishing
+│   ├── requirements.txt
+│   ├── lib/waveshare_epd/   # Vendored Waveshare driver
+│   └── systemd/
+│       └── easylabel.service
+└── pwa/                     # Phase 2
 ```
 
 ------
 
-## 6. Risks and Assumptions
+## 6. Risks and Decisions
 
-| Risk/Assumption                         | Solution/Measure                                     |
-| --------------------------------------- | ---------------------------------------------------- |
-| MQTT broker on GitHub is slow.          | Use a local MQTT broker (e.g., Mosquitto) as backup. |
-| E-Paper display responds slowly.        | Update asynchronously in the background.             |
-| Brother printer does not support Wi-Fi. | Implement USB connection as fallback.                |
+| Topic                              | Decision / Status                                                   |
+| ---------------------------------- | ------------------------------------------------------------------- |
+| MQTT broker                        | HiveMQ public broker — no setup, sufficient security via rotating key. |
+| Pillow version                     | Pinned to 9.5.0 — `brother_ql 0.9.4` uses removed `Image.ANTIALIAS` API from Pillow 10+. |
+| E-paper display (Phase 1)          | Import is optional in `main.py` — app runs without display attached. |
+| Brother printer USB PID            | QL-800 PID `0x209b` confirmed. Fallback: `file:///dev/usb/lp0`.    |
+| Printer upgrade path               | Switch `PRINTER_MODEL`, `PRINTER_IDENTIFIER`, `PRINTER_BACKEND` in `config.py` when upgrading to QL-820NWB. |
 
 ------
 
 ## 7. Open Points
 
-1. Which **E-Paper display model** will be used? (SPI/I2C?)
-2. Should the **MQTT broker** be hosted locally or on GitHub?
-3. Are there specific **label types** that should be prioritized?
+1. Connect and test the **E-Paper display** on the Raspberry Pi.
+2. Build the **PWA** (Phase 2) — hosted on GitHub Pages.
+3. Configure **Home Assistant** to publish MQTT messages to the public broker.
+4. Migrate from Raspberry Pi 2B to **Zero 2 W** when available.
+5. Upgrade printer to **QL-820NWB** (Wi-Fi) when available.
 
 ------
 
 **Next Steps:**
 
-- Order hardware components (Raspberry Pi, display, printer).
-- Set up MQTT broker (GitHub/local).
-- Test Python script for QR code generation and MQTT.
+- Wire and test the e-paper display (SPI).
+- Build the PWA frontend.
+- Set up Home Assistant MQTT automation to publish to `broker.hivemq.com`.
