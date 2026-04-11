@@ -1,7 +1,7 @@
 # Functional Specification Document (FSD)
 
 **Project:** Dynamic Label Printing System with Raspberry Pi, E-Paper Display, and MQTT
-**Version:** 1.4
+**Version:** 1.5
 **Date:** 11.04.2026
 **Author:** Bernd Heisterkamp
 
@@ -219,7 +219,58 @@ EasyLabelPrinting/
 
 ------
 
-## 7. Open Points
+## 7. Raspberry Pi Installation
+
+### 7.1 OS
+Raspberry Pi OS Lite (64-bit), configured via Raspberry Pi Imager with SSH and Wi-Fi enabled. SPI enabled via `sudo raspi-config nonint do_spi 0`.
+
+### 7.2 System Dependencies
+
+```bash
+sudo apt-get update && sudo apt-get upgrade -y
+sudo apt install -y python3-pip git fonts-dejavu libopenjp2-7 libusb-1.0-0 libfreetype6
+```
+
+| Package          | Purpose                                      |
+|------------------|----------------------------------------------|
+| `python3-pip`    | Python package installer                     |
+| `git`            | Clone repository                             |
+| `fonts-dejavu`   | DejaVuSans-Bold font for label text rendering |
+| `libopenjp2-7`   | Required by Pillow for image processing      |
+| `libusb-1.0-0`   | Required by pyusb for USB printer access     |
+| `libfreetype6`   | Required by Pillow for font rendering        |
+
+### 7.3 Python Packages
+
+```bash
+pip3 install -r ~/EasyLabelPrinting/pi/requirements.txt --break-system-packages
+```
+
+Note: do not use a virtual environment — install directly to system Python.
+
+### 7.4 USB Printer Access
+
+```bash
+sudo usermod -aG lp pi && sudo usermod -aG dialout pi
+```
+
+Log out and back in (or reboot) after running this.
+
+### 7.5 Waveshare E-Paper Driver
+
+Copy vendored driver files from the Waveshare GitHub repository:
+
+```bash
+cd ~/EasyLabelPrinting/pi/lib/waveshare_epd
+wget https://raw.githubusercontent.com/waveshare/e-Paper/master/RaspberryPi_JetsonNano/python/lib/waveshare_epd/epd1in54.py
+wget https://raw.githubusercontent.com/waveshare/e-Paper/master/RaspberryPi_JetsonNano/python/lib/waveshare_epd/epdconfig.py
+```
+
+Note: uses the V1 driver (`epd1in54.py`) which requires `lut_full_update` argument in `init()`.
+
+------
+
+## 8. Open Points
 
 1. Refactor Pi Python script to use two topics (`easylabel/data`, `easylabel/release`) and in-memory job store.
 2. Build the **PWA** (Phase 2) — prepare mode + release mode, hosted on GitHub Pages.
