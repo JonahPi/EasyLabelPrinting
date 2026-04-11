@@ -40,8 +40,7 @@ The system separates label **preparation** from label **release** using two inde
 | 3 | PWA publishes label data | PWA → Pi | `easylabel/data` |
 | 4 | Pi stores label data in memory (overwrites any previous job) | Pi | — |
 | 5 | User walks to printer, scans **dynamic QR** on e-ink display with phone camera | User | — |
-| 6 | PWA reopens with `?key=<key>` in URL, user taps "Print" | PWA | — |
-| 7 | PWA publishes print-release signal with key | PWA → Pi | `easylabel/release` |
+| 6 | PWA reopens with `?key=<key>` in URL, **immediately** publishes release signal — no user interaction needed | PWA → Pi | `easylabel/release` |
 | 8 | Pi validates key, prints stored label data, rotates key, updates display | Pi | — |
 
 ### 2.2 Components
@@ -76,8 +75,7 @@ Prepare phase (at workstation):
 Release phase (at printer):
 6. User scans dynamic QR on e-ink display with phone camera.
    → QR encodes: https://jonahpi.github.io/EasyLabelPrinting/?key=<key>
-7. PWA opens in release mode (key detected in URL), user taps "Print".
-8. PWA publishes to easylabel/release:
+7. PWA opens in release mode (key detected in URL), immediately publishes to easylabel/release — no user interaction required:
    {"key": "<key>"}
 9. Pi validates key (constant-time compare).
 10. Pi prints stored label data on 62mm endless media.
@@ -127,8 +125,8 @@ The `?type=` parameter pre-selects the label type in the PWA. Generated once, pr
 
 | ID   | Requirement                                                  | Details                                                    | Status   |
 | ---- | ------------------------------------------------------------ | ---------------------------------------------------------- | -------- |
-| FR13 | Detect `?key=` and enter release mode.                      | Show "Print" button and key info.                          | Deferred |
-| FR14 | On "Print": publish to `easylabel/release` via MQTT.        | Payload: `{"key": "<key>"}`. QoS 1.                        | Deferred |
+| FR13 | Detect `?key=` and enter release mode.                      | Immediately publish to `easylabel/release` on page load — no user interaction required. | Deferred |
+| FR14 | Publish to `easylabel/release` via MQTT.                    | Payload: `{"key": "<key>"}`. QoS 1.                        | Deferred |
 | FR15 | Show confirmation or error feedback after publish.          | "Sent to printer" on success, error message on failure.    | Deferred |
 | FR16 | Offline capability via Service Worker.                      | Cache-first for all static assets.                         | Deferred |
 | FR17 | Hosted on GitHub Pages.                                     | Auto-deploy via GitHub Actions on push to `main`.          | Deferred |
