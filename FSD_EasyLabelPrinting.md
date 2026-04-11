@@ -306,7 +306,7 @@ Used to label a spool of filament after opening. PWA provides the opening date a
 
 **Printed layout:**
 ```
-Material
+PLA 1.75mm Black
 Geöffnet am: 11.04.2026
 ```
 
