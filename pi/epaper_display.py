@@ -10,7 +10,7 @@ from PIL import Image
 class EpaperDisplay:
     def __init__(self):
         self.epd = epd1in54.EPD()
-        self.epd.init()
+        self.epd.init(self.epd.lut_full_update)
         self.epd.Clear(0xFF)  # clear to white
 
     def show(self, image: Image.Image) -> None:
@@ -24,6 +24,6 @@ class EpaperDisplay:
 
     def wake_and_show(self, image: Image.Image) -> None:
         """Re-initialize display (wake from sleep), show image, then sleep."""
-        self.epd.init()
+        self.epd.init(self.epd.lut_full_update)
         self.show(image)
         self.sleep()
