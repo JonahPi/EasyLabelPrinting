@@ -1,7 +1,7 @@
 # Functional Specification Document (FSD)
 
 **Project:** Dynamic Label Printing System with Raspberry Pi, E-Paper Display, and MQTT
-**Version:** 1.3
+**Version:** 1.4
 **Date:** 11.04.2026
 **Author:** Bernd Heisterkamp
 
@@ -102,7 +102,7 @@ The `?type=` parameter pre-selects the label type in the PWA. Generated once, pr
 | ID   | Requirement                                                    | Details                                                                 | Status |
 | ---- | -------------------------------------------------------------- | ----------------------------------------------------------------------- | ------ |
 | FR1  | Connect to Brother printer via USB.                            | `brother_ql`, backend `pyusb`, identifier `usb://0x04f9:0x209b`. Fallback: `file:///dev/usb/lp0`. | Done   |
-| FR2  | Generate dynamic QR code (PWA URL + session key) and display on E-Paper. | URL: `https://jonahpi.github.io/EasyLabelPrinting/?key=<key>`. `qrcode` + `Pillow 9.5.0`, Waveshare driver. | Implemented (e-paper hardware deferred) |
+| FR2  | Generate dynamic QR code (PWA URL + session key) and display on E-Paper. | URL: `https://jonahpi.github.io/EasyLabelPrinting/?key=<key>`. `qrcode` + `Pillow 10.x+`, Waveshare driver. | Done   |
 | FR3  | Subscribe to `easylabel/data` and store latest label in memory. | Overwrites any previously stored job. One slot only.                   | To do  |
 | FR4  | Subscribe to `easylabel/release` and validate session key.     | Constant-time compare (`secrets.compare_digest`). Reject if no pending job stored. | To do  |
 | FR5  | On valid release: print stored label, rotate key, clear stored job. | `brother_ql` convert + send. Update e-ink display after print.        | To do  |
@@ -212,7 +212,7 @@ EasyLabelPrinting/
 | No camera API in PWA               | Dynamic QR is scanned with the phone's native camera app, which opens the PWA URL directly. No in-app scanning needed. |
 | No localStorage needed             | Label data is published immediately to MQTT on "Prepare" — no client-side persistence required. |
 | MQTT broker                        | HiveMQ public broker. Security relies on rotating session key (48-bit entropy, valid max 5 min or one print). |
-| Pillow version                     | Pinned to 9.5.0 — `brother_ql 0.9.4` uses removed `Image.ANTIALIAS` from Pillow 10+. |
+| Pillow version                     | Unpinned (10.x+). `Image.ANTIALIAS` monkey-patched in `printer.py` for `brother_ql 0.9.4` compatibility. Pillow 9.5.0 does not build on Python 3.13. |
 | E-paper display (Phase 1)          | Import optional in `main.py` — app runs without display attached.   |
 | Brother printer USB PID            | QL-800 PID `0x209b` confirmed. Fallback: `file:///dev/usb/lp0`.    |
 | Printer upgrade path               | Switch `PRINTER_MODEL`, `PRINTER_IDENTIFIER`, `PRINTER_BACKEND` in `config.py` when upgrading to QL-820NWB. |
@@ -222,16 +222,15 @@ EasyLabelPrinting/
 ## 7. Open Points
 
 1. Refactor Pi Python script to use two topics (`easylabel/data`, `easylabel/release`) and in-memory job store.
-2. Connect and test the **E-Paper display** on the Raspberry Pi.
-3. Build the **PWA** (Phase 2) — prepare mode + release mode, hosted on GitHub Pages.
-4. Generate and print **static QR codes** for workstations.
-5. Migrate from Raspberry Pi 2B to **Zero 2 W** when available.
-6. Upgrade printer to **QL-820NWB** (Wi-Fi) when available.
+2. Build the **PWA** (Phase 2) — prepare mode + release mode, hosted on GitHub Pages.
+3. Generate and print **static QR codes** for workstations.
+4. Migrate from Raspberry Pi 2B to **Zero 2 W** when available.
+5. Upgrade printer to **QL-820NWB** (Wi-Fi) when available.
 
 ------
 
 **Next Steps:**
 
 - Refactor `mqtt_client.py` and `main.py` for the two-topic architecture.
-- Wire and test the e-paper display (SPI).
-- Build the PWA frontend.
+- Build the PWA frontend (Phase 2).
+- Generate and print static QR codes for workstations.
