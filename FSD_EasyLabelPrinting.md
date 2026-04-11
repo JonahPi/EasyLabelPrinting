@@ -282,10 +282,10 @@ Used to label privately stored material at the makerspace. PWA provides member n
 
 **Printed layout (each label):**
 ```
-Private Material
+Privates Material
 Max Mustermann
-Pick up before: 30.04.2026
-Piece 1 of 3
+Entsorgung vor: 30.04.2026
+Stück 1 von 3
 ```
 
 ---
@@ -306,9 +306,8 @@ Used to label a spool of filament after opening. PWA provides the opening date a
 
 **Printed layout:**
 ```
-Filament
-PLA 1.75mm Black
-Opened: 11.04.2026
+Material
+Geöffnet am: 11.04.2026
 ```
 
 ---
@@ -331,7 +330,7 @@ Used to label a completed 3D print waiting for pickup. PWA provides member name 
 ```
 3D Print Pickup
 Max Mustermann
-Pickup: 15.04.2026
+Abholung am: 15.04.2026
 ```
 
 ---

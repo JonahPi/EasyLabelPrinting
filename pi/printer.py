@@ -123,38 +123,35 @@ def _render_qrcode(data: dict) -> Image.Image:
 
 def _render_material_storage(data: dict, piece: int, total: int) -> Image.Image:
     """
-    Title:  Private Material  (large bold)
+    Title:  Privates Material  (large bold)
     Body:   member name
-            Pick up before: DD.MM.YYYY
-            Piece x of y
+            Entsorgung vor: DD.MM.YYYY
+            Stück x von y
     """
-    title_font, _, _ = _fit_font("Private Material", TITLE_FONT_SIZE_START)
+    title_font, _, _ = _fit_font("Privates Material", TITLE_FONT_SIZE_START)
     member_font, _, _ = _fit_font(data["member"], BODY_FONT_SIZE_START)
-    detail_font, _, _ = _fit_font("Pick up before: XX.XX.XXXX", BODY_FONT_SIZE_START)
-    piece_font, _, _ = _fit_font(f"Piece {piece} of {total}", BODY_FONT_SIZE_START)
+    detail_font, _, _ = _fit_font("Entsorgung vor: XX.XX.XXXX", BODY_FONT_SIZE_START)
+    piece_font, _, _ = _fit_font(f"Stück {piece} von {total}", BODY_FONT_SIZE_START)
 
     return _build_image([
-        ("Private Material", title_font),
+        ("Privates Material", title_font),
         (data["member"], member_font),
-        (f"Pick up before: {_fmt_date(data['pickup_before'])}", detail_font),
-        (f"Piece {piece} of {total}", piece_font),
+        (f"Entsorgung vor: {_fmt_date(data['pickup_before'])}", detail_font),
+        (f"Stück {piece} von {total}", piece_font),
     ])
 
 
 def _render_filament(data: dict) -> Image.Image:
     """
-    Title:  Filament  (large bold)
-    Body:   filament type
-            Opened: DD.MM.YYYY
+    Title:  Material  (large bold)
+            Geöffnet am: DD.MM.YYYY
     """
-    title_font, _, _ = _fit_font("Filament", TITLE_FONT_SIZE_START)
-    type_font, _, _ = _fit_font(data["filament_type"], BODY_FONT_SIZE_START)
-    date_font, _, _ = _fit_font("Opened: XX.XX.XXXX", BODY_FONT_SIZE_START)
+    title_font, _, _ = _fit_font("Material", TITLE_FONT_SIZE_START)
+    date_font, _, _ = _fit_font("Geöffnet am: XX.XX.XXXX", BODY_FONT_SIZE_START)
 
     return _build_image([
-        ("Filament", title_font),
-        (data["filament_type"], type_font),
-        (f"Opened: {_fmt_date(data['opened'])}", date_font),
+        ("Material", title_font),
+        (f"Geöffnet am: {_fmt_date(data['opened'])}", date_font),
     ])
 
 
@@ -162,16 +159,16 @@ def _render_3d_print(data: dict) -> Image.Image:
     """
     Title:  3D Print Pickup  (large bold)
     Body:   member name
-            Pickup: DD.MM.YYYY
+            Abholung am: DD.MM.YYYY
     """
     title_font, _, _ = _fit_font("3D Print Pickup", TITLE_FONT_SIZE_START)
     member_font, _, _ = _fit_font(data["member"], BODY_FONT_SIZE_START)
-    date_font, _, _ = _fit_font("Pickup: XX.XX.XXXX", BODY_FONT_SIZE_START)
+    date_font, _, _ = _fit_font("Abholung am: XX.XX.XXXX", BODY_FONT_SIZE_START)
 
     return _build_image([
         ("3D Print Pickup", title_font),
         (data["member"], member_font),
-        (f"Pickup: {_fmt_date(data['pickup_date'])}", date_font),
+        (f"Abholung am: {_fmt_date(data['pickup_date'])}", date_font),
     ])
 
 
