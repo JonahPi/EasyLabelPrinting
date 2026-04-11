@@ -1,7 +1,7 @@
 # Functional Specification Document (FSD)
 
 **Project:** Dynamic Label Printing System with Raspberry Pi, E-Paper Display, and MQTT
-**Version:** 1.5
+**Version:** 1.6
 **Date:** 11.04.2026
 **Author:** Bernd Heisterkamp
 
@@ -219,7 +219,136 @@ EasyLabelPrinting/
 
 ------
 
-## 7. Raspberry Pi Installation
+## 7. Label Types
+
+### 7.1 Overview
+
+| ID | `label_type` | Title on label | Multi-print | Status |
+|----|-------------|----------------|-------------|--------|
+| 1 | `freetext` | — | No | Done |
+| 2 | `qrcode` | — | No | Done |
+| 3 | `material_storage` | "Private Material" | Yes — prints y labels (piece 1 of y … y of y) | To do |
+| 4 | `filament` | "Filament" | No | To do |
+| 5 | `3d_print` | "3D Print Pickup" | No | To do |
+
+### 7.2 Label Type Details
+
+#### Type 1 — Free Text (`freetext`)
+User enters arbitrary text in the PWA. Printed as-is with auto-shrinking font.
+
+**MQTT payload:**
+```json
+{ "label_type": "freetext", "data": { "text": "Hello World\nLine 2" } }
+```
+
+**Printed layout:**
+```
+[free text, multi-line]
+```
+
+---
+
+#### Type 2 — QR Code (`qrcode`)
+User provides a URL or string. Pi generates a QR code image and prints it as a square label.
+
+**MQTT payload:**
+```json
+{ "label_type": "qrcode", "data": { "content": "https://example.com" } }
+```
+
+**Printed layout:**
+```
+[QR code, square, full label width]
+```
+
+---
+
+#### Type 3 — Temporary Material Storage (`material_storage`)
+Used to label privately stored material at the makerspace. PWA provides member name, pick-up deadline, and total number of pieces. Pi prints **y labels in sequence**, with the piece counter (x of y) incrementing automatically.
+
+**MQTT payload:**
+```json
+{
+  "label_type": "material_storage",
+  "data": {
+    "member": "Max Mustermann",
+    "pickup_before": "2026-04-30",
+    "pieces": 3
+  }
+}
+```
+
+**Print behavior:** Pi prints `pieces` labels sequentially, x = 1 … y.
+
+**Printed layout (each label):**
+```
+Private Material
+Max Mustermann
+Pick up before: 30.04.2026
+Piece 1 of 3
+```
+
+---
+
+#### Type 4 — Filament (`filament`)
+Used to label a spool of filament after opening. PWA provides the opening date and filament type.
+
+**MQTT payload:**
+```json
+{
+  "label_type": "filament",
+  "data": {
+    "opened": "2026-04-11",
+    "filament_type": "PLA 1.75mm Black"
+  }
+}
+```
+
+**Printed layout:**
+```
+Filament
+PLA 1.75mm Black
+Opened: 11.04.2026
+```
+
+---
+
+#### Type 5 — 3D Print Pickup (`3d_print`)
+Used to label a completed 3D print waiting for pickup. PWA provides member name and pickup date.
+
+**MQTT payload:**
+```json
+{
+  "label_type": "3d_print",
+  "data": {
+    "member": "Max Mustermann",
+    "pickup_date": "2026-04-15"
+  }
+}
+```
+
+**Printed layout:**
+```
+3D Print Pickup
+Max Mustermann
+Pickup: 15.04.2026
+```
+
+---
+
+### 7.3 Validation Rules (Pi-side)
+
+| `label_type` | Required fields | Constraints |
+|---|---|---|
+| `freetext` | `text` | Non-empty, ≤ 500 chars |
+| `qrcode` | `content` | Non-empty, ≤ 500 chars |
+| `material_storage` | `member`, `pickup_before`, `pieces` | `pieces` integer ≥ 1 |
+| `filament` | `opened`, `filament_type` | `opened` valid date string |
+| `3d_print` | `member`, `pickup_date` | `pickup_date` valid date string |
+
+------
+
+## 8. Raspberry Pi Installation
 
 ### 7.1 OS
 Raspberry Pi OS Lite (64-bit), configured via Raspberry Pi Imager with SSH and Wi-Fi enabled. SPI enabled via `sudo raspi-config nonint do_spi 0`.
@@ -270,7 +399,7 @@ Note: uses the V1 driver (`epd1in54.py`) which requires `lut_full_update` argume
 
 ------
 
-## 8. Open Points
+## 9. Open Points
 
 1. Refactor Pi Python script to use two topics (`easylabel/data`, `easylabel/release`) and in-memory job store.
 2. Build the **PWA** (Phase 2) — prepare mode + release mode, hosted on GitHub Pages.
