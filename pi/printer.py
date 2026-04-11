@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 
 import qrcode
 from PIL import Image, ImageDraw, ImageFont
@@ -15,55 +16,102 @@ log = logging.getLogger(__name__)
 
 LABEL_WIDTH_PX = 720  # 62mm at ~300dpi
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-FONT_SIZE_START = 60
+FONT_PATH_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+TITLE_FONT_SIZE_START = 80
+BODY_FONT_SIZE_START = 60
 FONT_SIZE_MIN = 20
 PADDING = 20
+TITLE_BODY_GAP = 10  # pixels between title and body text
 
 
-def _render_text_image(text: str) -> Image.Image:
-    """
-    Render free text onto an RGB image for 62mm endless media.
-    Width is fixed at 720px; height is determined by the text content.
-    Font size auto-shrinks to fit within the label width.
-    """
-    font_size = FONT_SIZE_START
-    font = None
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
+def _fit_font(text: str, size_start: int, bold: bool = True) -> tuple:
+    """Return (font, w, h) with font shrunk until text fits label width."""
+    path = FONT_PATH if bold else FONT_PATH_REGULAR
+    font_size = size_start
     while font_size >= FONT_SIZE_MIN:
-        font = ImageFont.truetype(FONT_PATH, font_size)
+        font = ImageFont.truetype(path, font_size)
         tmp = Image.new("RGB", (1, 1))
         draw = ImageDraw.Draw(tmp)
         bbox = draw.multiline_textbbox((0, 0), text, font=font)
-        text_w = bbox[2] - bbox[0]
-        if text_w <= LABEL_WIDTH_PX - 2 * PADDING:
-            break
+        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        if w <= LABEL_WIDTH_PX - 2 * PADDING:
+            return font, w, h
         font_size -= 2
-
-    # Final measurement with chosen font
+    font = ImageFont.truetype(path, FONT_SIZE_MIN)
     tmp = Image.new("RGB", (1, 1))
     draw = ImageDraw.Draw(tmp)
     bbox = draw.multiline_textbbox((0, 0), text, font=font)
-    text_h = bbox[3] - bbox[1]
+    return font, bbox[2] - bbox[0], bbox[3] - bbox[1]
 
-    img_h = text_h + 2 * PADDING
+
+def _fmt_date(iso: str) -> str:
+    """Convert ISO date string (YYYY-MM-DD) to DD.MM.YYYY for display."""
+    try:
+        return datetime.strptime(iso, "%Y-%m-%d").strftime("%d.%m.%Y")
+    except ValueError:
+        return iso  # return as-is if format is unexpected
+
+
+def _build_image(rows: list) -> Image.Image:
+    """
+    Build a label image from a list of (text, font) tuples rendered top-to-bottom.
+    Each row is left-aligned with PADDING. Rows are separated by TITLE_BODY_GAP.
+    """
+    tmp = Image.new("RGB", (1, 1))
+    draw = ImageDraw.Draw(tmp)
+    heights = []
+    for text, font in rows:
+        bbox = draw.multiline_textbbox((0, 0), text, font=font)
+        heights.append(bbox[3] - bbox[1])
+
+    img_h = PADDING + sum(heights) + TITLE_BODY_GAP * (len(rows) - 1) + PADDING
     img = Image.new("RGB", (LABEL_WIDTH_PX, img_h), "white")
     draw = ImageDraw.Draw(img)
-    draw.multiline_text((PADDING, PADDING), text, fill="black", font=font, align="left")
+
+    y = PADDING
+    for i, (text, font) in enumerate(rows):
+        draw.multiline_text((PADDING, y), text, fill="black", font=font, align="left")
+        y += heights[i] + TITLE_BODY_GAP
+
     return img
 
 
-def _render_qr_image(content: str) -> Image.Image:
+# ---------------------------------------------------------------------------
+# Label renderers
+# ---------------------------------------------------------------------------
+
+def _render_freetext(data: dict) -> Image.Image:
     """
-    Render a QR code onto an RGB image for 62mm endless media.
-    The QR code is square, filling the full label width.
+    First line = title (large bold font).
+    Remaining lines = body (smaller bold font).
     """
+    lines = data["text"].split("\n", 1)
+    title = lines[0]
+    body = lines[1] if len(lines) > 1 else ""
+
+    title_font, _, _ = _fit_font(title, TITLE_FONT_SIZE_START)
+    rows = [(title, title_font)]
+
+    if body:
+        body_font, _, _ = _fit_font(body, BODY_FONT_SIZE_START)
+        rows.append((body, body_font))
+
+    return _build_image(rows)
+
+
+def _render_qrcode(data: dict) -> Image.Image:
+    """QR code filling the full label width, square."""
     qr = qrcode.QRCode(
         version=None,
         error_correction=qrcode.constants.ERROR_CORRECT_M,
         box_size=10,
         border=1,
     )
-    qr.add_data(content)
+    qr.add_data(data["content"])
     qr.make(fit=True)
     qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
     qr_size = LABEL_WIDTH_PX - 2 * PADDING
@@ -73,9 +121,97 @@ def _render_qr_image(content: str) -> Image.Image:
     return img
 
 
+def _render_material_storage(data: dict, piece: int, total: int) -> Image.Image:
+    """
+    Title:  Private Material  (large bold)
+    Body:   member name
+            Pick up before: DD.MM.YYYY
+            Piece x of y
+    """
+    title_font, _, _ = _fit_font("Private Material", TITLE_FONT_SIZE_START)
+    member_font, _, _ = _fit_font(data["member"], BODY_FONT_SIZE_START)
+    detail_font, _, _ = _fit_font("Pick up before: XX.XX.XXXX", BODY_FONT_SIZE_START)
+    piece_font, _, _ = _fit_font(f"Piece {piece} of {total}", BODY_FONT_SIZE_START)
+
+    return _build_image([
+        ("Private Material", title_font),
+        (data["member"], member_font),
+        (f"Pick up before: {_fmt_date(data['pickup_before'])}", detail_font),
+        (f"Piece {piece} of {total}", piece_font),
+    ])
+
+
+def _render_filament(data: dict) -> Image.Image:
+    """
+    Title:  Filament  (large bold)
+    Body:   filament type
+            Opened: DD.MM.YYYY
+    """
+    title_font, _, _ = _fit_font("Filament", TITLE_FONT_SIZE_START)
+    type_font, _, _ = _fit_font(data["filament_type"], BODY_FONT_SIZE_START)
+    date_font, _, _ = _fit_font("Opened: XX.XX.XXXX", BODY_FONT_SIZE_START)
+
+    return _build_image([
+        ("Filament", title_font),
+        (data["filament_type"], type_font),
+        (f"Opened: {_fmt_date(data['opened'])}", date_font),
+    ])
+
+
+def _render_3d_print(data: dict) -> Image.Image:
+    """
+    Title:  3D Print Pickup  (large bold)
+    Body:   member name
+            Pickup: DD.MM.YYYY
+    """
+    title_font, _, _ = _fit_font("3D Print Pickup", TITLE_FONT_SIZE_START)
+    member_font, _, _ = _fit_font(data["member"], BODY_FONT_SIZE_START)
+    date_font, _, _ = _fit_font("Pickup: XX.XX.XXXX", BODY_FONT_SIZE_START)
+
+    return _build_image([
+        ("3D Print Pickup", title_font),
+        (data["member"], member_font),
+        (f"Pickup: {_fmt_date(data['pickup_date'])}", date_font),
+    ])
+
+
+# ---------------------------------------------------------------------------
+# Low-level send
+# ---------------------------------------------------------------------------
+
+def _send(img: Image.Image, printer_identifier: str, model: str,
+          media: str, backend: str) -> None:
+    """Convert image to raster instructions and send to printer. Raises on error."""
+    qlr = BrotherQLRaster(model)
+    qlr.exception_on_warning = True
+    instructions = convert(
+        qlr=qlr,
+        images=[img],
+        label=media,
+        rotate="0",
+        threshold=70.0,
+        dither=False,
+        compress=False,
+        red=False,
+        dpi_600=False,
+        hq=True,
+        cut=True,
+    )
+    send(
+        instructions=instructions,
+        printer_identifier=printer_identifier,
+        backend_identifier=backend,
+        blocking=True,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
 def print_label(
     label_type: str,
-    content: str,
+    data: dict,
     printer_identifier: str,
     model: str,
     media: str = "62",
@@ -85,8 +221,9 @@ def print_label(
     Render and print a label.
 
     Args:
-        label_type: "freetext" or "qrcode".
-        content: Text to print, or URL/string to encode as QR code.
+        label_type: One of 'freetext', 'qrcode', 'material_storage',
+                    'filament', '3d_print'.
+        data: Dict of label fields as received from MQTT payload.
         printer_identifier: e.g. "usb://0x04f9:0x209b" or "file:///dev/usb/lp0".
         model: Brother QL model string, e.g. "QL-800".
         media: Label identifier — "62" for 62mm endless.
@@ -96,33 +233,32 @@ def print_label(
         True on success, False on error.
     """
     try:
-        if label_type == "qrcode":
-            img = _render_qr_image(content)
+        if label_type == "freetext":
+            _send(_render_freetext(data), printer_identifier, model, media, backend)
+
+        elif label_type == "qrcode":
+            _send(_render_qrcode(data), printer_identifier, model, media, backend)
+
+        elif label_type == "material_storage":
+            total = int(data["pieces"])
+            for piece in range(1, total + 1):
+                img = _render_material_storage(data, piece, total)
+                _send(img, printer_identifier, model, media, backend)
+                log.info("Printed piece %d of %d.", piece, total)
+
+        elif label_type == "filament":
+            _send(_render_filament(data), printer_identifier, model, media, backend)
+
+        elif label_type == "3d_print":
+            _send(_render_3d_print(data), printer_identifier, model, media, backend)
+
         else:
-            img = _render_text_image(content)
-        qlr = BrotherQLRaster(model)
-        qlr.exception_on_warning = True
-        instructions = convert(
-            qlr=qlr,
-            images=[img],
-            label=media,
-            rotate="0",
-            threshold=70.0,
-            dither=False,
-            compress=False,
-            red=False,
-            dpi_600=False,
-            hq=True,
-            cut=True,
-        )
-        send(
-            instructions=instructions,
-            printer_identifier=printer_identifier,
-            backend_identifier=backend,
-            blocking=True,
-        )
-        log.info("Print job sent successfully.")
+            log.error("Unknown label_type: %s", label_type)
+            return False
+
+        log.info("Print job '%s' completed.", label_type)
         return True
+
     except Exception as e:
         log.error("Print failed: %s", e)
         return False
