@@ -1,6 +1,11 @@
 import logging
 
 from PIL import Image, ImageDraw, ImageFont
+
+# brother_ql uses Image.ANTIALIAS which was removed in Pillow 10 — patch it back
+if not hasattr(Image, 'ANTIALIAS'):
+    Image.ANTIALIAS = Image.LANCZOS
+
 from brother_ql.conversion import convert
 from brother_ql.backends.helpers import send
 from brother_ql.raster import BrotherQLRaster
