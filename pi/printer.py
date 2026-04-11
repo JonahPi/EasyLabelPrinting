@@ -1,5 +1,6 @@
 import logging
 
+import qrcode
 from PIL import Image, ImageDraw, ImageFont
 
 # brother_ql uses Image.ANTIALIAS which was removed in Pillow 10 — patch it back
@@ -51,20 +52,42 @@ def _render_text_image(text: str) -> Image.Image:
     return img
 
 
+def _render_qr_image(content: str) -> Image.Image:
+    """
+    Render a QR code onto an RGB image for 62mm endless media.
+    The QR code is square, filling the full label width.
+    """
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=10,
+        border=1,
+    )
+    qr.add_data(content)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+    qr_size = LABEL_WIDTH_PX - 2 * PADDING
+    qr_img = qr_img.resize((qr_size, qr_size), Image.LANCZOS)
+    img = Image.new("RGB", (LABEL_WIDTH_PX, LABEL_WIDTH_PX), "white")
+    img.paste(qr_img, (PADDING, PADDING))
+    return img
+
+
 def print_label(
-    text: str,
+    label_type: str,
+    content: str,
     printer_identifier: str,
     model: str,
     media: str = "62",
     backend: str = "pyusb",
 ) -> bool:
     """
-    Render text as an image and send to the Brother label printer.
+    Render and print a label.
 
     Args:
-        text: Free text to print (may contain newlines).
-        printer_identifier: e.g. "usb://0x04f9:0x209b" or "file:///dev/usb/lp0"
-                            or "tcp://192.168.x.x" for network.
+        label_type: "freetext" or "qrcode".
+        content: Text to print, or URL/string to encode as QR code.
+        printer_identifier: e.g. "usb://0x04f9:0x209b" or "file:///dev/usb/lp0".
         model: Brother QL model string, e.g. "QL-800".
         media: Label identifier — "62" for 62mm endless.
         backend: "pyusb" for USB, "network" for Wi-Fi.
@@ -73,7 +96,10 @@ def print_label(
         True on success, False on error.
     """
     try:
-        img = _render_text_image(text)
+        if label_type == "qrcode":
+            img = _render_qr_image(content)
+        else:
+            img = _render_text_image(content)
         qlr = BrotherQLRaster(model)
         qlr.exception_on_warning = True
         instructions = convert(
