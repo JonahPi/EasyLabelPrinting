@@ -81,7 +81,7 @@ def main():
             refresh_display()
         else:
             log.error('Print failed — key not rotated, pending job kept.')
-        publish_printer_status()
+        publish_printer_status(force=True)
 
     # ── Start ─────────────────────────────────────────────────────────────────
 
@@ -96,21 +96,32 @@ def main():
 
     # ── Printer status publisher ───────────────────────────────────────────────
 
-    def publish_printer_status() -> None:
+    _last_printer_status = {'online': None}  # mutable container for closure
+
+    def publish_printer_status(force: bool = False) -> None:
+        """Check printer and publish retained status only when it changes."""
         online = is_printer_available(config.PRINTER_IDENTIFIER)
-        mqtt.publish(TOPIC_STATUS, {'printer': 'online' if online else 'offline'})
-        log.info('Printer status: %s', 'online' if online else 'offline')
+        if force or online != _last_printer_status['online']:
+            _last_printer_status['online'] = online
+            status = 'online' if online else 'offline'
+            mqtt.publish(TOPIC_STATUS, {'printer': status}, retain=True)
+            log.info('Printer status changed: %s', status)
 
-    publish_printer_status()  # publish immediately on startup
+    publish_printer_status(force=True)  # publish immediately on startup
 
-    # Periodic QR refresh + printer status check
+    # Periodic QR refresh (every 5 min)
     def _refresh_loop():
         while not stop_event.wait(config.QR_REFRESH_INTERVAL_SECONDS):
             log.info('Periodic QR refresh.')
             refresh_display()
+
+    # Printer check loop (every 60s, publish only on change)
+    def _printer_check_loop():
+        while not stop_event.wait(config.PRINTER_CHECK_INTERVAL_SECONDS):
             publish_printer_status()
 
-    threading.Thread(target=_refresh_loop, daemon=True).start()
+    threading.Thread(target=_refresh_loop,        daemon=True).start()
+    threading.Thread(target=_printer_check_loop,  daemon=True).start()
 
     def _shutdown(sig, frame):
         log.info('Shutdown signal received.')

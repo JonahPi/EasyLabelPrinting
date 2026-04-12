@@ -7,7 +7,8 @@ MQTT_KEEPALIVE = 60
 PWA_BASE_URL = "https://jonahpi.github.io/EasyLabelPrinting/"
 
 # Timing
-QR_REFRESH_INTERVAL_SECONDS = 300  # 5 minutes
+QR_REFRESH_INTERVAL_SECONDS = 300   # 5 minutes
+PRINTER_CHECK_INTERVAL_SECONDS = 60 # 1 minute
 
 # Printer — QL-800 via USB (upgrade to QL-820NWB + "network" backend later)
 PRINTER_IDENTIFIER = "usb://0x04f9:0x209b"  # verify PID with lsusb; fallback: "file:///dev/usb/lp0"

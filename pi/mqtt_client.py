@@ -50,10 +50,10 @@ class MQTTClient:
         self._client.loop_stop()
         self._client.disconnect()
 
-    def publish(self, topic: str, payload: dict) -> None:
+    def publish(self, topic: str, payload: dict, retain: bool = False) -> None:
         """Publish a JSON message to the given topic (fire-and-forget)."""
         try:
-            self._client.publish(topic, json.dumps(payload), qos=1)
+            self._client.publish(topic, json.dumps(payload), qos=1, retain=retain)
         except Exception as e:
             log.warning('Publish to %s failed: %s', topic, e)
 
