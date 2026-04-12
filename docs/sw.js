@@ -1,4 +1,4 @@
-const CACHE = 'easylabel-v1';
+const CACHE = 'easylabel-v2';
 
 // Cache resources as they are fetched (no pre-caching to avoid path issues on GitHub Pages)
 self.addEventListener('fetch', (e) => {
