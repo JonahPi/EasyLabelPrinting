@@ -15,7 +15,7 @@ import config
 SAMPLES = {
     "freetext": {
         "label_type": "freetext",
-        "data": {"text": "Hello World\nThis is a test label\nLine three"},
+        "data": {"text": "Hello World\nThis is a test label\nLine three", "copies": 2},
     },
     "qrcode": {
         "label_type": "qrcode",

@@ -225,7 +225,7 @@ EasyLabelPrinting/
 
 | ID | `label_type` | Title on label | Multi-print | Status |
 |----|-------------|----------------|-------------|--------|
-| 1 | `freetext` | — | No | Done |
+| 1 | `freetext` | — | Yes — user selects number of copies | Done |
 | 2 | `qrcode` | — | No | Done |
 | 3 | `material_storage` | "Private Material" | Yes — prints y labels (piece 1 of y … y of y) | To do |
 | 4 | `filament` | "Filament" | No | To do |
@@ -238,8 +238,9 @@ User enters arbitrary text in the PWA. Printed as-is with auto-shrinking font.
 
 **MQTT payload:**
 ```json
-{ "label_type": "freetext", "data": { "text": "Hello World\nLine 2" } }
+{ "label_type": "freetext", "data": { "text": "Hello World\nLine 2", "copies": 2 } }
 ```
+`copies` is optional, defaults to 1.
 
 **Printed layout:**
 ```

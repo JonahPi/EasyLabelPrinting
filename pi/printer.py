@@ -143,14 +143,14 @@ def _render_material_storage(data: dict, piece: int, total: int) -> Image.Image:
 
 def _render_filament(data: dict) -> Image.Image:
     """
-    Title:  Material  (large bold)
+    Title:  <filament_type>  (large bold)
             Geöffnet am: DD.MM.YYYY
     """
-    title_font, _, _ = _fit_font("Material", TITLE_FONT_SIZE_START)
+    title_font, _, _ = _fit_font(data["filament_type"], TITLE_FONT_SIZE_START)
     date_font, _, _ = _fit_font("Geöffnet am: XX.XX.XXXX", BODY_FONT_SIZE_START)
 
     return _build_image([
-        ("Material", title_font),
+        (data["filament_type"], title_font),
         (f"Geöffnet am: {_fmt_date(data['opened'])}", date_font),
     ])
 
@@ -231,7 +231,11 @@ def print_label(
     """
     try:
         if label_type == "freetext":
-            _send(_render_freetext(data), printer_identifier, model, media, backend)
+            copies = int(data.get("copies", 1))
+            img = _render_freetext(data)
+            for i in range(copies):
+                _send(img, printer_identifier, model, media, backend)
+                log.info("Printed copy %d of %d.", i + 1, copies)
 
         elif label_type == "qrcode":
             _send(_render_qrcode(data), printer_identifier, model, media, backend)
