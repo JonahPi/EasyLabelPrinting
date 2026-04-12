@@ -1,0 +1,372 @@
+'use strict';
+
+const BROKER_URL   = 'wss://broker.hivemq.com:8884/mqtt';
+const TOPIC_DATA   = 'easylabel/data';
+const TOPIC_RELEASE = 'easylabel/release';
+
+let mqttClient  = null;
+let isConnected = false;
+
+// ── Date helpers ──────────────────────────────────────────────────────────────
+
+function isoDate(offsetDays = 0) {
+    const d = new Date();
+    d.setDate(d.getDate() + offsetDays);
+    return d.toISOString().split('T')[0]; // YYYY-MM-DD
+}
+
+// ── Label type configuration ──────────────────────────────────────────────────
+
+const LABEL_TYPES = {
+    freetext: {
+        title: 'Freitext',
+        fields: [
+            {
+                id: 'text', label: 'Text', type: 'textarea',
+                required: true, maxLength: 500,
+                hint: 'Die erste Zeile wird als Titel gedruckt (größer und fett).',
+            },
+            {
+                id: 'copies', label: 'Anzahl Kopien', type: 'number',
+                min: 1, max: 99, defaultValue: '1',
+            },
+        ],
+        buildPayload: (f) => ({
+            label_type: 'freetext',
+            data: { text: f.text.trim(), copies: Math.max(1, parseInt(f.copies) || 1) },
+        }),
+    },
+
+    qrcode: {
+        title: 'QR-Code',
+        fields: [
+            {
+                id: 'content', label: 'Inhalt / URL', type: 'text',
+                required: true, maxLength: 500,
+                placeholder: 'https://example.com',
+            },
+        ],
+        buildPayload: (f) => ({
+            label_type: 'qrcode',
+            data: { content: f.content.trim() },
+        }),
+    },
+
+    material_storage: {
+        title: 'Privates Material',
+        fields: [
+            {
+                id: 'member', label: 'Mitglied', type: 'text', required: true,
+            },
+            {
+                id: 'pickup_before', label: 'Entsorgung vor', type: 'date',
+                required: true, defaultValue: isoDate(30),
+            },
+            {
+                id: 'pieces', label: 'Anzahl Stücke', type: 'number',
+                min: 1, max: 99, defaultValue: '1',
+                hint: 'Es wird für jedes Stück ein eigenes Label gedruckt.',
+            },
+        ],
+        buildPayload: (f) => ({
+            label_type: 'material_storage',
+            data: {
+                member: f.member.trim(),
+                pickup_before: f.pickup_before,
+                pieces: Math.max(1, parseInt(f.pieces) || 1),
+            },
+        }),
+    },
+
+    filament: {
+        title: 'Filament',
+        fields: [
+            {
+                id: 'filament_type', label: 'Filament-Typ', type: 'text',
+                required: true,
+                list: [
+                    'PLA 1.75mm', 'PLA+ 1.75mm', 'PETG 1.75mm', 'ABS 1.75mm',
+                    'TPU 1.75mm', 'ASA 1.75mm', 'Nylon 1.75mm', 'Resin',
+                ],
+            },
+            {
+                id: 'opened', label: 'Geöffnet am', type: 'date',
+                required: true, defaultValue: isoDate(0),
+            },
+        ],
+        buildPayload: (f) => ({
+            label_type: 'filament',
+            data: { filament_type: f.filament_type.trim(), opened: f.opened },
+        }),
+    },
+
+    '3d_print': {
+        title: '3D Print Pickup',
+        fields: [
+            {
+                id: 'member', label: 'Mitglied', type: 'text', required: true,
+            },
+            {
+                id: 'pickup_date', label: 'Abholung am', type: 'date',
+                required: true, defaultValue: isoDate(7),
+            },
+        ],
+        buildPayload: (f) => ({
+            label_type: '3d_print',
+            data: { member: f.member.trim(), pickup_date: f.pickup_date },
+        }),
+    },
+};
+
+// ── MQTT ──────────────────────────────────────────────────────────────────────
+
+function initMQTT() {
+    const clientId = 'pwa_' + Math.random().toString(36).slice(2, 10);
+    mqttClient = mqtt.connect(BROKER_URL, {
+        clientId,
+        clean: true,
+        reconnectPeriod: 3000,
+        connectTimeout: 10000,
+    });
+    mqttClient.on('connect', () => {
+        isConnected = true;
+        setStatusDot(true);
+        setStatusBar('Verbunden', 'ok');
+    });
+    mqttClient.on('offline', () => {
+        isConnected = false;
+        setStatusDot(false);
+        setStatusBar('Verbindung getrennt — wird neu verbunden...', '');
+    });
+    mqttClient.on('error', (e) => {
+        setStatusBar('Verbindungsfehler: ' + e.message, 'err');
+    });
+}
+
+function waitForConnect(timeoutMs = 15000) {
+    return new Promise((resolve, reject) => {
+        if (isConnected) { resolve(); return; }
+        const timer = setTimeout(
+            () => reject(new Error('Verbindungs-Timeout. Bitte Internetverbindung prüfen.')),
+            timeoutMs,
+        );
+        mqttClient.once('connect', () => { clearTimeout(timer); resolve(); });
+    });
+}
+
+function mqttPublish(topic, payload) {
+    return new Promise((resolve, reject) => {
+        mqttClient.publish(topic, JSON.stringify(payload), { qos: 1 }, (err) => {
+            if (err) reject(err); else resolve();
+        });
+    });
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+
+function setStatusDot(ok) {
+    const dot = document.getElementById('status-dot');
+    if (dot) dot.className = 'status-dot' + (ok ? ' ok' : '');
+}
+
+function setStatusBar(msg, cls = '') {
+    const bar = document.getElementById('status-bar');
+    if (!bar) return;
+    bar.textContent = msg;
+    bar.className = 'status-bar' + (cls ? ' ' + cls : '');
+}
+
+function setPageTitle(t) {
+    const el = document.getElementById('page-title');
+    if (el) el.textContent = t;
+    document.title = t ? t + ' — EasyLabel' : 'EasyLabel';
+}
+
+function showBack(show) {
+    document.getElementById('back-btn').classList.toggle('hidden', !show);
+}
+
+function setApp(html) {
+    document.getElementById('app').innerHTML = html;
+}
+
+function showFeedback(msg, success) {
+    const el = document.getElementById('feedback');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'feedback ' + (success ? 'success' : 'error');
+}
+
+// ── Field renderer ────────────────────────────────────────────────────────────
+
+function renderField(f) {
+    const val = f.defaultValue || '';
+    let input;
+
+    if (f.type === 'textarea') {
+        input = `<textarea id="${f.id}" name="${f.id}"
+            ${f.required  ? 'required'               : ''}
+            ${f.maxLength ? `maxlength="${f.maxLength}"` : ''}
+            ${f.placeholder ? `placeholder="${escAttr(f.placeholder)}"` : ''}
+        ></textarea>`;
+
+    } else if (f.list) {
+        const listId = f.id + '-list';
+        const opts   = f.list.map(v => `<option value="${escAttr(v)}">`).join('');
+        input = `
+            <input type="text" id="${f.id}" name="${f.id}" list="${listId}"
+                ${f.required ? 'required' : ''}
+                value="${escAttr(val)}">
+            <datalist id="${listId}">${opts}</datalist>`;
+
+    } else {
+        input = `<input type="${f.type}" id="${f.id}" name="${f.id}"
+            ${f.required    ? 'required'                  : ''}
+            ${f.min  !== undefined ? `min="${f.min}"`     : ''}
+            ${f.max  !== undefined ? `max="${f.max}"`     : ''}
+            ${f.maxLength   ? `maxlength="${f.maxLength}"` : ''}
+            ${f.placeholder ? `placeholder="${escAttr(f.placeholder)}"` : ''}
+            value="${escAttr(val)}">`;
+    }
+
+    return `
+        <div class="form-group">
+            <label for="${f.id}">${escHTML(f.label)}</label>
+            ${input}
+            ${f.hint ? `<p class="hint">${escHTML(f.hint)}</p>` : ''}
+        </div>`;
+}
+
+function escAttr(s) {
+    return String(s).replace(/"/g, '&quot;');
+}
+function escHTML(s) {
+    return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ── Pages ─────────────────────────────────────────────────────────────────────
+
+function showHome() {
+    setPageTitle('EasyLabel');
+    showBack(false);
+    const buttons = Object.entries(LABEL_TYPES)
+        .map(([type, cfg]) =>
+            `<a class="label-btn" href="?type=${encodeURIComponent(type)}">${escHTML(cfg.title)}</a>`)
+        .join('');
+    setApp(`<div class="home-grid">${buttons}</div>`);
+}
+
+function showLabelPage(type) {
+    const cfg = LABEL_TYPES[type];
+    if (!cfg) { showHome(); return; }
+
+    setPageTitle(cfg.title);
+    showBack(true);
+
+    const fields = cfg.fields.map(renderField).join('');
+    setApp(`
+        <div class="card">
+            <form id="label-form" novalidate>
+                ${fields}
+                <button type="submit" class="btn-primary" id="prepare-btn">Vorbereiten</button>
+            </form>
+            <div id="feedback" class="feedback"></div>
+        </div>
+    `);
+
+    document.getElementById('label-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('prepare-btn');
+
+        // Collect values
+        const formData = {};
+        for (const f of cfg.fields) {
+            formData[f.id] = document.getElementById(f.id).value;
+        }
+
+        // Validate required fields
+        for (const f of cfg.fields) {
+            if (f.required && !formData[f.id].trim()) {
+                showFeedback(`Bitte "${f.label}" ausfüllen.`, false);
+                document.getElementById(f.id).focus();
+                return;
+            }
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Sende…';
+
+        try {
+            if (!isConnected) {
+                setStatusBar('Warte auf Verbindung…', '');
+                await waitForConnect();
+            }
+            const payload = cfg.buildPayload(formData);
+            await mqttPublish(TOPIC_DATA, payload);
+            showFeedback('✓ Label vorbereitet! Gehe zum Drucker und scanne den QR-Code.', true);
+        } catch (err) {
+            showFeedback('Fehler: ' + err.message, false);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Vorbereiten';
+        }
+    });
+}
+
+async function showReleasePage(key) {
+    setPageTitle('Drucken');
+    showBack(false);
+    setApp(`
+        <div class="card release-card">
+            <div class="spinner"></div>
+            <div class="release-title">Druckauftrag wird gesendet…</div>
+            <div class="release-sub">Bitte warten</div>
+        </div>
+    `);
+
+    try {
+        if (!isConnected) await waitForConnect();
+        await mqttPublish(TOPIC_RELEASE, { key });
+        setApp(`
+            <div class="card release-card">
+                <div class="release-icon">&#10003;</div>
+                <div class="release-title">Druckauftrag gesendet!</div>
+                <div class="release-sub">Das Label wird jetzt gedruckt.</div>
+            </div>
+        `);
+    } catch (err) {
+        setApp(`
+            <div class="card release-card">
+                <div class="release-icon">&#10007;</div>
+                <div class="release-title">Fehler beim Senden</div>
+                <div class="release-sub">${escHTML(err.message)}</div>
+            </div>
+        `);
+    }
+}
+
+// ── Router ────────────────────────────────────────────────────────────────────
+
+function route() {
+    const p    = new URLSearchParams(location.search);
+    const type = p.get('type');
+    const key  = p.get('key');
+
+    if (key)                           showReleasePage(key);
+    else if (type && LABEL_TYPES[type]) showLabelPage(type);
+    else                               showHome();
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('back-btn').addEventListener('click', () => history.back());
+    initMQTT();
+    route();
+});
+
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
+}
