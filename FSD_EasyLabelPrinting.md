@@ -281,12 +281,12 @@ Used to label privately stored material at the makerspace. PWA provides member n
 
 **Print behavior:** Pi prints `pieces` labels sequentially, x = 1 … y.
 
-**Printed layout (each label):**
+**Printed layout (each label, date auto-calculated as today + 21 days):**
 ```
 Privates Material
 Max Mustermann
-Entsorgung vor: 30.04.2026
-Stück 1 von 3
+Wird abgeholt bis zum 03.05.2026
+Material wird nach Ablauf der Frist vom Fablab entsorgt
 ```
 
 ---

@@ -1,6 +1,6 @@
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import usb.core
 import qrcode
@@ -146,23 +146,28 @@ def _render_qrcode(data: dict) -> Image.Image:
     return img
 
 
-def _render_material_storage(data: dict, piece: int, total: int) -> Image.Image:
+def _render_material_storage(data: dict) -> Image.Image:
     """
-    Title:  Privates Material  (large bold)
-    Body:   member name
-            Entsorgung vor: DD.MM.YYYY
-            Stück x von y
+    Privates Material  (title)
+    <member name>
+    Wird abgeholt bis zum DD.MM.YYYY  (auto: today + 21 days)
+    Material wird nach Ablauf der Frist vom Fablab entsorgt
     """
-    title_font, _, _ = _fit_font("Privates Material", TITLE_FONT_SIZE_START)
-    member_font, _, _ = _fit_font(data["member"], BODY_FONT_SIZE_START)
-    detail_font, _, _ = _fit_font("Entsorgung vor: XX.XX.XXXX", BODY_FONT_SIZE_START)
-    piece_font, _, _ = _fit_font(f"Stück {piece} von {total}", BODY_FONT_SIZE_START)
+    pickup_date = _fmt_date(
+        (datetime.now() + timedelta(days=21)).strftime('%Y-%m-%d')
+    )
+    disclaimer = "Material wird nach Ablauf der Frist vom Fablab entsorgt"
+
+    title_font,      _, _ = _fit_font("Privates Material", TITLE_FONT_SIZE_START)
+    member_font,     _, _ = _fit_font(data["member"], BODY_FONT_SIZE_START)
+    date_font,       _, _ = _fit_font(f"Wird abgeholt bis zum {pickup_date}", BODY_FONT_SIZE_START)
+    disclaimer_font, _, _ = _fit_font(disclaimer, BODY_FONT_SIZE_START)
 
     return _build_image([
         ("Privates Material", title_font),
         (data["member"], member_font),
-        (f"Entsorgung vor: {_fmt_date(data['pickup_before'])}", detail_font),
-        (f"Stück {piece} von {total}", piece_font),
+        (f"Wird abgeholt bis zum {pickup_date}", date_font),
+        (disclaimer, disclaimer_font),
     ])
 
 
@@ -266,9 +271,9 @@ def print_label(
             _send(_render_qrcode(data), printer_identifier, model, media, backend)
 
         elif label_type == "material_storage":
-            total = int(data["pieces"])
+            total = int(data.get("pieces", 1))
+            img = _render_material_storage(data)
             for piece in range(1, total + 1):
-                img = _render_material_storage(data, piece, total)
                 _send(img, printer_identifier, model, media, backend)
                 log.info("Printed piece %d of %d.", piece, total)
 

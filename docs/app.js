@@ -60,20 +60,15 @@ const LABEL_TYPES = {
                 id: 'member', label: 'Mitglied', type: 'text', required: true,
             },
             {
-                id: 'pickup_before', label: 'Entsorgung vor', type: 'date',
-                required: true, defaultValue: isoDate(30),
-            },
-            {
                 id: 'pieces', label: 'Anzahl Stücke', type: 'number',
                 min: 1, max: 99, defaultValue: '1',
-                hint: 'Es wird für jedes Stück ein eigenes Label gedruckt.',
+                hint: 'Es wird für jedes Stück ein eigenes Label gedruckt. Abholdatum wird automatisch auf 3 Wochen ab heute gesetzt.',
             },
         ],
         buildPayload: (f) => ({
             label_type: 'material_storage',
             data: {
                 member: f.member.trim(),
-                pickup_before: f.pickup_before,
                 pieces: Math.max(1, parseInt(f.pieces) || 1),
             },
         }),
