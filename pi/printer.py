@@ -1,6 +1,8 @@
 import logging
+import os
 from datetime import datetime
 
+import usb.core
 import qrcode
 from PIL import Image, ImageDraw, ImageFont
 
@@ -22,6 +24,29 @@ BODY_FONT_SIZE_START = 60
 FONT_SIZE_MIN = 20
 PADDING = 20
 TITLE_BODY_GAP = 10  # pixels between title and body text
+
+
+# ---------------------------------------------------------------------------
+# Printer availability check
+# ---------------------------------------------------------------------------
+
+def is_printer_available(printer_identifier: str) -> bool:
+    """
+    Check whether the printer is connected and reachable.
+    Supports 'usb://0xVID:0xPID' and 'file:///dev/usb/lpX' identifiers.
+    """
+    try:
+        if printer_identifier.startswith('file://'):
+            path = printer_identifier.replace('file://', '')
+            return os.path.exists(path)
+        elif printer_identifier.startswith('usb://'):
+            parts = printer_identifier.replace('usb://', '').split(':')
+            vid = int(parts[0], 16)
+            pid = int(parts[1], 16)
+            return usb.core.find(idVendor=vid, idProduct=pid) is not None
+    except Exception as e:
+        log.warning('Printer availability check failed: %s', e)
+    return False
 
 
 # ---------------------------------------------------------------------------

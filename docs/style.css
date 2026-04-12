@@ -60,6 +60,15 @@ header {
 }
 .status-dot.ok { background: #a5d6a7; }
 
+.printer-dot {
+    font-size: 18px;
+    opacity: 0.4;
+    flex-shrink: 0;
+    transition: opacity 0.4s;
+}
+.printer-dot.online  { opacity: 1; }
+.printer-dot.offline { opacity: 0.3; filter: grayscale(1); }
+
 /* ── Status bar ──────────────────────────────────── */
 .status-bar {
     background: #e3f2fd;
@@ -109,6 +118,17 @@ main {
     border-color: var(--primary-light);
     box-shadow: 0 3px 10px rgba(21,101,192,0.2);
     transform: scale(0.98);
+}
+
+/* ── Printer warning ─────────────────────────────── */
+.printer-warning {
+    background: #fff3e0;
+    color: #e65100;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 12px;
 }
 
 /* ── Form card ───────────────────────────────────── */

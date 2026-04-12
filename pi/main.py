@@ -5,8 +5,8 @@ import threading
 
 import config
 from key_manager import KeyManager
-from mqtt_client import MQTTClient
-from printer import print_label
+from mqtt_client import MQTTClient, TOPIC_STATUS
+from printer import print_label, is_printer_available
 from qr_generator import make_qr_image
 
 logging.basicConfig(
@@ -81,6 +81,7 @@ def main():
             refresh_display()
         else:
             log.error('Print failed — key not rotated, pending job kept.')
+        publish_printer_status()
 
     # ── Start ─────────────────────────────────────────────────────────────────
 
@@ -93,11 +94,21 @@ def main():
     mqtt.connect()
     refresh_display()
 
-    # Periodic QR refresh (key unchanged — security hygiene)
+    # ── Printer status publisher ───────────────────────────────────────────────
+
+    def publish_printer_status() -> None:
+        online = is_printer_available(config.PRINTER_IDENTIFIER)
+        mqtt.publish(TOPIC_STATUS, {'printer': 'online' if online else 'offline'})
+        log.info('Printer status: %s', 'online' if online else 'offline')
+
+    publish_printer_status()  # publish immediately on startup
+
+    # Periodic QR refresh + printer status check
     def _refresh_loop():
         while not stop_event.wait(config.QR_REFRESH_INTERVAL_SECONDS):
             log.info('Periodic QR refresh.')
             refresh_display()
+            publish_printer_status()
 
     threading.Thread(target=_refresh_loop, daemon=True).start()
 

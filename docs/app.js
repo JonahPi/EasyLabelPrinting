@@ -1,8 +1,9 @@
 'use strict';
 
-const BROKER_URL   = 'wss://broker.hivemq.com:8884/mqtt';
-const TOPIC_DATA   = 'easylabel/data';
+const BROKER_URL    = 'wss://broker.hivemq.com:8884/mqtt';
+const TOPIC_DATA    = 'easylabel/data';
 const TOPIC_RELEASE = 'easylabel/release';
+const TOPIC_STATUS  = 'easylabel/status';
 
 let mqttClient  = null;
 let isConnected = false;
@@ -132,6 +133,7 @@ function initMQTT() {
         isConnected = true;
         setStatusDot(true);
         setStatusBar('Verbunden', 'ok');
+        mqttClient.subscribe(TOPIC_STATUS, { qos: 1 });
     });
     mqttClient.on('offline', () => {
         isConnected = false;
@@ -140,6 +142,13 @@ function initMQTT() {
     });
     mqttClient.on('error', (e) => {
         setStatusBar('Verbindungsfehler: ' + e.message, 'err');
+    });
+    mqttClient.on('message', (topic, message) => {
+        if (topic !== TOPIC_STATUS) return;
+        try {
+            const payload = JSON.parse(message.toString());
+            setPrinterStatus(payload.printer === 'online');
+        } catch (_) {}
     });
 }
 
@@ -167,6 +176,18 @@ function mqttPublish(topic, payload) {
 function setStatusDot(ok) {
     const dot = document.getElementById('status-dot');
     if (dot) dot.className = 'status-dot' + (ok ? ' ok' : '');
+}
+
+let _printerOnline = null;
+
+function setPrinterStatus(online) {
+    _printerOnline = online;
+    const dot = document.getElementById('printer-dot');
+    if (dot) dot.className = 'printer-dot ' + (online ? 'online' : 'offline');
+    dot.title = 'Drucker: ' + (online ? 'bereit' : 'nicht erreichbar');
+    // Update warning banner if visible
+    const warn = document.getElementById('printer-warning');
+    if (warn) warn.style.display = online ? 'none' : 'block';
 }
 
 function setStatusBar(msg, cls = '') {
@@ -266,7 +287,11 @@ function showLabelPage(type) {
     showBack(true);
 
     const fields = cfg.fields.map(renderField).join('');
+    const printerOffline = _printerOnline === false;
     setApp(`
+        <div id="printer-warning" class="printer-warning" style="${printerOffline ? '' : 'display:none'}">
+            &#9888; Drucker nicht erreichbar — Label wird trotzdem vorbereitet.
+        </div>
         <div class="card">
             <form id="label-form" novalidate>
                 ${fields}

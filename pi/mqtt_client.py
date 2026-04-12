@@ -9,6 +9,7 @@ log = logging.getLogger(__name__)
 
 TOPIC_DATA    = 'easylabel/data'
 TOPIC_RELEASE = 'easylabel/release'
+TOPIC_STATUS  = 'easylabel/status'
 
 
 class MQTTClient:
@@ -48,6 +49,13 @@ class MQTTClient:
     def disconnect(self) -> None:
         self._client.loop_stop()
         self._client.disconnect()
+
+    def publish(self, topic: str, payload: dict) -> None:
+        """Publish a JSON message to the given topic (fire-and-forget)."""
+        try:
+            self._client.publish(topic, json.dumps(payload), qos=1)
+        except Exception as e:
+            log.warning('Publish to %s failed: %s', topic, e)
 
     # ── Internal callbacks ────────────────────────────────────────────────────
 
