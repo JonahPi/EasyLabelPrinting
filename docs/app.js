@@ -182,10 +182,12 @@ let _printerOnline = null;
 
 function setPrinterStatus(online) {
     _printerOnline = online;
-    const dot = document.getElementById('printer-dot');
-    if (dot) dot.className = 'printer-dot ' + (online ? 'online' : 'offline');
-    dot.title = 'Drucker: ' + (online ? 'bereit' : 'nicht erreichbar');
-    // Update warning banner if visible
+    const el = document.getElementById('printer-status');
+    if (el) {
+        el.textContent = online ? 'Printer ON' : 'Printer OFF';
+        el.className = 'printer-status ' + (online ? 'online' : 'offline');
+    }
+    // Update warning banner if visible on label pages
     const warn = document.getElementById('printer-warning');
     if (warn) warn.style.display = online ? 'none' : 'block';
 }

@@ -60,14 +60,18 @@ header {
 }
 .status-dot.ok { background: #a5d6a7; }
 
-.printer-dot {
-    font-size: 18px;
-    opacity: 0.4;
+.printer-status {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 10px;
     flex-shrink: 0;
-    transition: opacity 0.4s;
+    background: rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.6);
+    letter-spacing: 0.3px;
 }
-.printer-dot.online  { opacity: 1; }
-.printer-dot.offline { opacity: 0.3; filter: grayscale(1); }
+.printer-status.online  { background: rgba(165,214,167,0.3); color: #c8e6c9; }
+.printer-status.offline { background: rgba(229,115,115,0.4); color: #ffcdd2; }
 
 /* ── Status bar ──────────────────────────────────── */
 .status-bar {
