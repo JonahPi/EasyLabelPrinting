@@ -6,5 +6,5 @@ Functional Specification: [FSD_EasyLabelPrinting.md](FSD_EasyLabelPrinting.md)
 
 ![Prepare Labels](pics/PrepLabels.jpg)
 
-![Release Labels](pics/ReleaseLabels.jpg)
+![Release Labels](pics/ReleaseLabels.JPG)
 
