@@ -7,7 +7,7 @@ import config
 from key_manager import KeyManager
 from mqtt_client import MQTTClient, TOPIC_STATUS
 from printer import print_label, is_printer_available
-from qr_generator import make_qr_image
+from qr_generator import make_qr_image, make_home_image
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,14 +33,28 @@ def main():
 
     stop_event = threading.Event()
 
-    # ── Display helper ────────────────────────────────────────────────────────
+    # ── Display helpers ───────────────────────────────────────────────────────
 
-    def refresh_display() -> None:
+    def show_home_screen() -> None:
+        if display:
+            img = make_home_image(config.PWA_BASE_URL)
+            display.wake_and_show(img)
+        log.info('Home screen shown.')
+
+    def show_release_qr() -> None:
         url = f'{config.PWA_BASE_URL}?key={keys.current_key}'
         if display:
             img = make_qr_image(url)
             display.wake_and_show(img)
-        log.info('Active key: %s  QR URL: %s', keys.current_key, url)
+        log.info('Release QR shown. Key: %s  URL: %s', keys.current_key, url)
+
+    def refresh_display() -> None:
+        with pending_lock:
+            has_pending = pending['label_type'] is not None
+        if has_pending:
+            show_release_qr()
+        else:
+            show_home_screen()
 
     # ── MQTT callbacks ────────────────────────────────────────────────────────
 
@@ -49,6 +63,7 @@ def main():
             pending['label_type'] = label_type
             pending['data']       = data
         log.info('Pending job stored: type=%s', label_type)
+        show_release_qr()
 
     def on_release(key: str) -> None:
         if not keys.validate(key):
@@ -78,7 +93,7 @@ def main():
                 pending['label_type'] = None
                 pending['data']       = None
             keys.rotate()
-            refresh_display()
+            show_home_screen()
         else:
             log.error('Print failed — key not rotated, pending job kept.')
         publish_printer_status(force=True)
@@ -92,7 +107,7 @@ def main():
         on_release=on_release,
     )
     mqtt.connect()
-    refresh_display()
+    show_home_screen()
 
     # ── Printer status publisher ───────────────────────────────────────────────
 
