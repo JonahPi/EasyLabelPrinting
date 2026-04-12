@@ -7,21 +7,29 @@ import paho.mqtt.client as mqtt
 
 log = logging.getLogger(__name__)
 
+TOPIC_DATA    = 'easylabel/data'
+TOPIC_RELEASE = 'easylabel/release'
 
-class MQTTSubscriber:
+
+class MQTTClient:
     def __init__(
         self,
         broker: str,
         port: int,
-        key_validator: Callable[[str], bool],
-        on_valid_message: Callable[[str], None],
+        on_data:    Callable[[str, dict], None],
+        on_release: Callable[[str], None],
     ):
-        self._validator = key_validator
-        self._on_valid = on_valid_message
-        self._active_topic: str = ""
+        """
+        on_data(label_type, data)  — called when a label job arrives on easylabel/data
+        on_release(key)            — called when a print release arrives on easylabel/release
+        """
+        self._on_data    = on_data
+        self._on_release = on_release
+        self._broker     = broker
+        self._port       = port
 
         self._client = mqtt.Client(
-            client_id="",
+            client_id='',
             protocol=mqtt.MQTTv5,
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
         )
@@ -29,21 +37,9 @@ class MQTTSubscriber:
             cert_reqs=ssl.CERT_REQUIRED,
             tls_version=ssl.PROTOCOL_TLS_CLIENT,
         )
-        self._client.on_connect = self._on_connect
-        self._client.on_message = self._on_message
+        self._client.on_connect    = self._on_connect
+        self._client.on_message    = self._on_message
         self._client.on_disconnect = self._on_disconnect
-
-        self._broker = broker
-        self._port = port
-
-    def set_topic(self, key: str) -> None:
-        """Switch subscription to the new key topic."""
-        if self._active_topic and self._client.is_connected():
-            self._client.unsubscribe(self._active_topic)
-        self._active_topic = f"labels/{key}"
-        if self._client.is_connected():
-            self._client.subscribe(self._active_topic, qos=1)
-            log.info("Subscribed to %s", self._active_topic)
 
     def connect(self) -> None:
         self._client.connect(self._broker, self._port, keepalive=60)
@@ -53,38 +49,48 @@ class MQTTSubscriber:
         self._client.loop_stop()
         self._client.disconnect()
 
+    # ── Internal callbacks ────────────────────────────────────────────────────
+
     def _on_connect(self, client, userdata, flags, reason_code, properties):
         if reason_code == 0:
-            log.info("MQTT connected to %s:%s", self._broker, self._port)
-            if self._active_topic:
-                client.subscribe(self._active_topic, qos=1)
-                log.info("Subscribed to %s", self._active_topic)
+            client.subscribe(TOPIC_DATA,    qos=1)
+            client.subscribe(TOPIC_RELEASE, qos=1)
+            log.info('MQTT connected — subscribed to %s and %s', TOPIC_DATA, TOPIC_RELEASE)
         else:
-            log.error("MQTT connection failed: reason_code=%s", reason_code)
+            log.error('MQTT connection failed: %s', reason_code)
 
     def _on_disconnect(self, client, userdata, flags, reason_code, properties):
-        log.warning("MQTT disconnected: reason_code=%s — will reconnect", reason_code)
+        log.warning('MQTT disconnected (%s) — will reconnect', reason_code)
 
     def _on_message(self, client, userdata, msg):
         try:
-            payload = json.loads(msg.payload.decode("utf-8"))
+            payload = json.loads(msg.payload.decode('utf-8'))
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            log.warning("Malformed MQTT message: %s", e)
+            log.warning('Malformed MQTT message on %s: %s', msg.topic, e)
             return
 
-        key = payload.get("key", "")
-        label_type = payload.get("label_type", "")
-        text = payload.get("data", {}).get("text", "")
+        if msg.topic == TOPIC_DATA:
+            self._handle_data(payload)
+        elif msg.topic == TOPIC_RELEASE:
+            self._handle_release(payload)
 
-        if not self._validator(key):
-            log.warning("Invalid key received — ignoring message.")
+    def _handle_data(self, payload: dict):
+        label_type = payload.get('label_type', '')
+        data       = payload.get('data', {})
+        valid_types = {'freetext', 'qrcode', 'material_storage', 'filament', '3d_print'}
+        if label_type not in valid_types:
+            log.warning('Unknown label_type "%s" — ignoring.', label_type)
             return
-        if label_type != "freetext":
-            log.warning("Unsupported label_type '%s' — ignoring.", label_type)
+        if not isinstance(data, dict):
+            log.warning('Invalid data field — ignoring.')
             return
-        if not text or len(text) > 500:
-            log.warning("Invalid text payload (empty or >500 chars) — ignoring.")
-            return
+        log.info('Label data received: type=%s', label_type)
+        self._on_data(label_type, data)
 
-        log.info("Valid print request received.")
-        self._on_valid(text)
+    def _handle_release(self, payload: dict):
+        key = payload.get('key', '')
+        if not key:
+            log.warning('Release message missing key — ignoring.')
+            return
+        log.info('Release signal received.')
+        self._on_release(key)
