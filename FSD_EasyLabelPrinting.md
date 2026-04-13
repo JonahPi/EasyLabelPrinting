@@ -286,6 +286,7 @@ LABEL_MEDIA                  = "50"  # 50mm endless
 | 3 | `material_storage` | "Privates Material" | Yes — prints `pieces` labels | Done |
 | 4 | `filament` | Value of `filament_type` | No | Done |
 | 5 | `3d_print` | "3D Print" | No | Done |
+| 6 | `price_tag` | Price + unit (bold, large) | Yes — `copies` field | To do |
 
 ### 7.2 Label Type Details
 
@@ -390,6 +391,41 @@ Abholung am: 15.04.2026
 
 ---
 
+#### Type 6 — Price Tag (`price_tag`)
+Used to label items for sale. User enters the price in CHF and selects the unit. An optional comment appears on the second line in a smaller, non-bold font.
+
+**PWA fields:**
+- Price (CHF, numeric, e.g. `8.20`)
+- Unit (dropdown, default: per piece):
+  - `piece` → "/ Stück"
+  - `kg` → "/ kg"
+  - `100g` → "/ 100g"
+  - `m` → "/ m"
+  - `l` → "/ l"
+- Comment (optional text, single line)
+
+**MQTT payload:**
+```json
+{
+  "label_type": "price_tag",
+  "data": {
+    "price": 8.20,
+    "unit": "piece",
+    "comment": "Acrylglas 3mm",
+    "copies": 3
+  }
+}
+```
+`comment` is optional. `copies` is optional, defaults to 1.
+
+**Printed layout:**
+```
+CHF 8.20 / Stück        ← bold, large font
+Acrylglas 3mm           ← smaller, not bold (omitted if no comment)
+```
+
+---
+
 ### 7.3 Validation Rules (Pi-side)
 
 | `label_type` | Required fields | Constraints |
@@ -399,6 +435,7 @@ Abholung am: 15.04.2026
 | `material_storage` | `member`, `pieces` | `pieces` integer ≥ 1; pickup date auto-calculated |
 | `filament` | `opened`, `filament_type` | `opened` valid date string |
 | `3d_print` | `member`, `pickup_date` | `pickup_date` valid date string |
+| `price_tag` | `price`, `unit` | `price` numeric > 0; `unit` one of `piece`, `kg`, `100g`, `m`, `l`; `comment` optional ≤ 100 chars; `copies` integer ≥ 1 |
 
 ------
 
