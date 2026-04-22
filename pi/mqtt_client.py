@@ -43,7 +43,8 @@ class MQTTClient:
         self._client.on_disconnect = self._on_disconnect
 
     def connect(self) -> None:
-        self._client.connect(self._broker, self._port, keepalive=60)
+        self._client.reconnect_delay_set(min_delay=1, max_delay=60)
+        self._client.connect(self._broker, self._port, keepalive=30)
         self._client.loop_start()
 
     def disconnect(self) -> None:
@@ -68,7 +69,10 @@ class MQTTClient:
             log.error('MQTT connection failed: %s', reason_code)
 
     def _on_disconnect(self, client, userdata, flags, reason_code, properties):
-        log.warning('MQTT disconnected (%s) — will reconnect', reason_code)
+        if reason_code == 0:
+            log.info('MQTT disconnected cleanly.')
+        else:
+            log.warning('MQTT disconnected unexpectedly (%s) — reconnecting with backoff (1–60 s)', reason_code)
 
     def _on_message(self, client, userdata, msg):
         try:
