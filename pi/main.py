@@ -1,5 +1,6 @@
 import logging
 import signal
+import subprocess
 import sys
 import threading
 
@@ -135,8 +136,39 @@ def main():
         while not stop_event.wait(config.PRINTER_CHECK_INTERVAL_SECONDS):
             publish_printer_status()
 
+    # Network watchdog (ping every 30s; reset wlan0 after 3 consecutive failures)
+    net_fail_count = 0
+
+    def _network_watchdog_loop():
+        nonlocal net_fail_count
+        while not stop_event.wait(config.NET_WATCHDOG_INTERVAL_SECONDS):
+            r = subprocess.run(
+                ['ping', '-c', '1', '-W', '3', config.NET_WATCHDOG_PING_HOST],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            if r.returncode == 0:
+                if net_fail_count:
+                    log.info('Network restored.')
+                net_fail_count = 0
+            else:
+                net_fail_count += 1
+                log.warning('Network ping failed (%d/%d)', net_fail_count, config.NET_WATCHDOG_FAIL_THRESHOLD)
+                if net_fail_count >= config.NET_WATCHDOG_FAIL_THRESHOLD:
+                    log.error('Resetting %s interface.', config.NET_WATCHDOG_IFACE)
+                    subprocess.run(
+                        ['sudo', 'ip', 'link', 'set', config.NET_WATCHDOG_IFACE, 'down'],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    )
+                    stop_event.wait(3)
+                    subprocess.run(
+                        ['sudo', 'ip', 'link', 'set', config.NET_WATCHDOG_IFACE, 'up'],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    )
+                    net_fail_count = 0
+
     threading.Thread(target=_refresh_loop,        daemon=True).start()
     threading.Thread(target=_printer_check_loop,  daemon=True).start()
+    threading.Thread(target=_network_watchdog_loop, daemon=True).start()
 
     def _shutdown(sig, frame):
         log.info('Shutdown signal received.')

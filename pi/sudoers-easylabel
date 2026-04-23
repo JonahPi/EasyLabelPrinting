@@ -1,0 +1,5 @@
+# Allow the pi user to reset the wlan0 interface without a password.
+# Install: sudo cp sudoers-easylabel /etc/sudoers.d/easylabel
+#          sudo chmod 440 /etc/sudoers.d/easylabel
+# Verify ip path with: which ip
+pi ALL=(ALL) NOPASSWD: /usr/sbin/ip link set wlan0 down, /usr/sbin/ip link set wlan0 up

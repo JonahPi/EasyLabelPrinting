@@ -16,6 +16,12 @@ PRINTER_MODEL = "QL-800"
 PRINTER_BACKEND = "pyusb"
 LABEL_MEDIA = "62"  # 62mm endless
 
+# Network watchdog
+NET_WATCHDOG_INTERVAL_SECONDS = 30   # ping interval
+NET_WATCHDOG_FAIL_THRESHOLD   = 3    # consecutive failures before interface reset
+NET_WATCHDOG_PING_HOST        = "8.8.8.8"
+NET_WATCHDOG_IFACE            = "wlan0"
+
 # E-Paper (Waveshare 1.54" 200x200, SPI)
 EPAPER_WIDTH = 200
 EPAPER_HEIGHT = 200
