@@ -10,11 +10,11 @@ PWA_BASE_URL = "https://jonahpi.github.io/EasyLabelPrinting/"
 QR_REFRESH_INTERVAL_SECONDS = 300   # 5 minutes
 PRINTER_CHECK_INTERVAL_SECONDS = 60 # 1 minute
 
-# Printer — QL-800 via USB (upgrade to QL-820NWB + "network" backend later)
-PRINTER_IDENTIFIER = "usb://0x04f9:0x209b"  # verify PID with lsusb; fallback: "file:///dev/usb/lp0"
-PRINTER_MODEL = "QL-800"
+# Printer — QL-820NWB via USB
+PRINTER_IDENTIFIER = "usb://0x04f9:0x209d"  # verify PID with lsusb; fallback: "file:///dev/usb/lp0"
+PRINTER_MODEL = "QL-820NWB"
 PRINTER_BACKEND = "pyusb"
-LABEL_MEDIA = "62"  # 62mm endless
+LABEL_MEDIA = "50"  # 50mm endless
 
 # Network watchdog
 NET_WATCHDOG_INTERVAL_SECONDS = 30   # ping interval
