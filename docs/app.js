@@ -357,6 +357,7 @@ async function showReleasePage(key) {
                 <div class="release-sub">Das Label wird jetzt gedruckt.</div>
             </div>
         `);
+        setTimeout(showHome, 3000);
     } catch (err) {
         setApp(`
             <div class="card release-card">
