@@ -244,3 +244,87 @@ textarea {
     margin: 0 auto 20px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Scanner ──────────────────────────────────────── */
+.scanner-root {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: #000;
+    overflow: hidden;
+}
+
+#scanner-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+#scanner-canvas { display: none; }
+
+.scanner-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 64px 24px 56px;
+}
+
+.scanner-hint {
+    color: #fff;
+    background: rgba(0,0,0,0.55);
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+    max-width: 280px;
+    line-height: 1.4;
+}
+
+.scanner-frame {
+    width: 220px;
+    height: 220px;
+    border: 3px solid rgba(255,255,255,0.9);
+    border-radius: 12px;
+    box-shadow: 0 0 0 4000px rgba(0,0,0,0.45);
+}
+
+.scanner-cancel-btn {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-radius: 24px;
+    padding: 14px 40px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    -webkit-appearance: none;
+}
+.scanner-cancel-btn:active { background: rgba(255,255,255,0.3); }
+
+.scanner-error-box {
+    color: #fff;
+    text-align: center;
+    background: rgba(0,0,0,0.7);
+    border-radius: 12px;
+    padding: 28px 24px;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    align-items: center;
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+.scanner-error-hint {
+    font-size: 13px;
+    opacity: 0.75;
+    font-weight: 400;
+}

@@ -327,10 +327,9 @@ function showLabelPage(type) {
             }
             const payload = cfg.buildPayload(formData);
             await mqttPublish(TOPIC_DATA, payload);
-            showFeedback('✓ Label vorbereitet! Gehe zum Drucker und scanne den QR-Code.', true);
+            showScannerPage();
         } catch (err) {
             showFeedback('Fehler: ' + err.message, false);
-        } finally {
             btn.disabled = false;
             btn.textContent = 'Vorbereiten';
         }
@@ -367,6 +366,87 @@ async function showReleasePage(key) {
             </div>
         `);
     }
+}
+
+// ── Camera scanner ────────────────────────────────────────────────────────────
+
+let _scannerStream     = null;
+let _scannerIntervalId = null;
+let _scannerRoot       = null;
+
+function showScannerPage() {
+    stopScanner();
+    setPageTitle('QR scannen');
+    showBack(false);
+
+    _scannerRoot = document.createElement('div');
+    _scannerRoot.className = 'scanner-root';
+    _scannerRoot.innerHTML = `
+        <video id="scanner-video" autoplay muted playsinline></video>
+        <canvas id="scanner-canvas"></canvas>
+        <div class="scanner-overlay">
+            <p class="scanner-hint">Halte die Kamera auf den QR-Code am Drucker</p>
+            <div class="scanner-frame"></div>
+            <button class="scanner-cancel-btn" type="button">Abbrechen</button>
+        </div>
+    `;
+    document.body.appendChild(_scannerRoot);
+
+    _scannerRoot.querySelector('.scanner-cancel-btn').addEventListener('click', () => {
+        stopScanner();
+        showHome();
+    });
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        _showScannerError('Kamera nicht verfügbar. Bitte mit der nativen Kamera-App scannen.');
+        return;
+    }
+
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+        .then(stream => {
+            _scannerStream = stream;
+            const video  = _scannerRoot.querySelector('#scanner-video');
+            const canvas = _scannerRoot.querySelector('#scanner-canvas');
+            const ctx    = canvas.getContext('2d', { willReadFrequently: true });
+            video.srcObject = stream;
+
+            _scannerIntervalId = setInterval(() => {
+                if (!_scannerRoot || video.readyState !== video.HAVE_ENOUGH_DATA) return;
+                canvas.width  = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0);
+                const img  = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+                if (!code) return;
+                try {
+                    const key = new URL(code.data).searchParams.get('key');
+                    if (key) { stopScanner(); showReleasePage(key); }
+                } catch (_) {}
+            }, 150);
+        })
+        .catch(err => _showScannerError('Kamera nicht verfügbar: ' + err.message));
+}
+
+function _showScannerError(msg) {
+    if (!_scannerRoot) return;
+    const overlay = _scannerRoot.querySelector('.scanner-overlay');
+    overlay.innerHTML = `
+        <div class="scanner-error-box">
+            <p>${escHTML(msg)}</p>
+            <p class="scanner-error-hint">Sie können den QR-Code am Drucker auch mit der nativen Kamera-App scannen.</p>
+            <button class="scanner-cancel-btn" type="button">Zurück</button>
+        </div>
+    `;
+    overlay.querySelector('.scanner-cancel-btn').addEventListener('click', () => {
+        stopScanner();
+        showHome();
+    });
+}
+
+function stopScanner() {
+    if (_scannerIntervalId) { clearInterval(_scannerIntervalId); _scannerIntervalId = null; }
+    if (_scannerStream)     { _scannerStream.getTracks().forEach(t => t.stop()); _scannerStream = null; }
+    if (_scannerRoot)       { _scannerRoot.remove(); _scannerRoot = null; }
 }
 
 // ── Router ────────────────────────────────────────────────────────────────────
