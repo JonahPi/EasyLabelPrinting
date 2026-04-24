@@ -20,7 +20,7 @@ function isoDate(offsetDays = 0) {
 
 const LABEL_TYPES = {
     freetext: {
-        title: 'Freitext',
+        title: 'Freitext Standard',
         fields: [
             {
                 id: 'text', label: 'Text', type: 'textarea',
@@ -34,6 +34,25 @@ const LABEL_TYPES = {
         ],
         buildPayload: (f) => ({
             label_type: 'freetext',
+            data: { text: f.text.trim(), copies: Math.max(1, parseInt(f.copies) || 1) },
+        }),
+    },
+
+    freetext_banner: {
+        title: 'Freitext Banner',
+        fields: [
+            {
+                id: 'text', label: 'Text', type: 'text',
+                required: true, maxLength: 20,
+                hint: 'Maximal 20 Zeichen. Die Buchstabenhöhe füllt die gesamte Papierbreite (50mm).',
+            },
+            {
+                id: 'copies', label: 'Anzahl Kopien', type: 'number',
+                min: 1, max: 99, defaultValue: '1',
+            },
+        ],
+        buildPayload: (f) => ({
+            label_type: 'freetext_banner',
             data: { text: f.text.trim(), copies: Math.max(1, parseInt(f.copies) || 1) },
         }),
     },

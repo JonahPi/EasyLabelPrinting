@@ -89,7 +89,7 @@ class MQTTClient:
     def _handle_data(self, payload: dict):
         label_type = payload.get('label_type', '')
         data       = payload.get('data', {})
-        valid_types = {'freetext', 'qrcode', 'material_storage', 'filament', '3d_print'}
+        valid_types = {'freetext', 'freetext_banner', 'qrcode', 'material_storage', 'filament', '3d_print'}
         if label_type not in valid_types:
             log.warning('Unknown label_type "%s" — ignoring.', label_type)
             return

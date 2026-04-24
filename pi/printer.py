@@ -16,7 +16,8 @@ from brother_ql.raster import BrotherQLRaster
 
 log = logging.getLogger(__name__)
 
-LABEL_WIDTH_PX = 720  # 62mm at ~300dpi
+LABEL_WIDTH_PX = 720       # 62mm at ~300dpi
+BANNER_TAPE_WIDTH_PX = 554 # printable width for 50mm endless (brother_ql "50" label)
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 FONT_PATH_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 TITLE_FONT_SIZE_START = 80
@@ -126,6 +127,35 @@ def _render_freetext(data: dict) -> Image.Image:
         rows.append((body, body_font))
 
     return _build_image(rows)
+
+
+def _render_freetext_banner(data: dict) -> Image.Image:
+    """
+    Single-line text sized so the letter height fills the full tape width (50mm).
+    The image is rotated 90° so it feeds correctly as endless media.
+    """
+    text      = data["text"].strip()
+    target_h  = BANNER_TAPE_WIDTH_PX - 2 * PADDING
+    font_size = 480
+    font      = ImageFont.truetype(FONT_PATH, FONT_SIZE_MIN)
+    tw, th    = 0, 0
+
+    while font_size >= FONT_SIZE_MIN:
+        f    = ImageFont.truetype(FONT_PATH, font_size)
+        tmp  = Image.new("RGB", (1, 1))
+        bbox = ImageDraw.Draw(tmp).textbbox((0, 0), text, font=f)
+        tw_t, th_t = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        if th_t <= target_h:
+            font, tw, th = f, tw_t, th_t
+            break
+        font_size -= 4
+
+    img  = Image.new("RGB", (tw + 2 * PADDING, BANNER_TAPE_WIDTH_PX), "white")
+    draw = ImageDraw.Draw(img)
+    draw.text((PADDING, (BANNER_TAPE_WIDTH_PX - th) // 2), text, fill="black", font=font)
+
+    # Rotate 90° CCW so image width == BANNER_TAPE_WIDTH_PX (= tape printable width)
+    return img.rotate(90, expand=True)
 
 
 def _render_qrcode(data: dict) -> Image.Image:
@@ -266,6 +296,13 @@ def print_label(
             for i in range(copies):
                 _send(img, printer_identifier, model, media, backend)
                 log.info("Printed copy %d of %d.", i + 1, copies)
+
+        elif label_type == "freetext_banner":
+            copies = int(data.get("copies", 1))
+            img = _render_freetext_banner(data)
+            for i in range(copies):
+                _send(img, printer_identifier, model, media, backend)
+                log.info("Printed banner copy %d of %d.", i + 1, copies)
 
         elif label_type == "qrcode":
             _send(_render_qrcode(data), printer_identifier, model, media, backend)
