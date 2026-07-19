@@ -1,0 +1,10 @@
+{
+    "name": "EasyLabel Print",
+    "short_name": "EasyLabel",
+    "description": "Label-Drucker PWA für den Makerspace",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#1565c0",
+    "icons": []
+}
